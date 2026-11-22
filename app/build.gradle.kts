@@ -26,15 +26,15 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 2
-            versionName = "1.1.0"
+            versionCode = 3
+            versionName = "1.1.1"
             buildConfigField("String", "SITE_URL", "\"https://wamdalibya.netlify.app/\"")
         }
         create("en") {
             dimension = "language"
             applicationId = "net.libyapulse.app"
-            versionCode = 1
-            versionName = "1.0.0"
+            versionCode = 2
+            versionName = "1.0.1"
             buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/libyapulse/\"")
         }
     }

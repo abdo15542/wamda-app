@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         // Hides the Netlify "Powered by" badge (and anything Netlify-branded)
         // inside the app. Runs on every page load and watches for late
         // injections, so the badge never flashes on screen.
-        const val HIDE_BADGE_JS = "(function(){var css=document.createElement('style');css.textContent='[id*=\"netlify\" i],[class*=\"netlify\" i],iframe[src*=\"netlify\"]{display:none!important}';document.head.appendChild(css);function hide(){document.querySelectorAll('iframe[src*=\"netlify\"],[id*=\"netlify\" i],[class*=\"netlify\" i]').forEach(function(e){e.style.display='none';});document.querySelectorAll('a,div,span').forEach(function(e){if(e.children.length===0&&e.textContent&&e.textContent.indexOf('Powered by Netlify')!==-1){e.style.display='none';}});}hide();new MutationObserver(hide).observe(document.documentElement,{childList:true,subtree:true});})();"
+        const val HIDE_BADGE_JS = "(function(){var css=document.createElement('style');css.textContent='#nl-badge-frame,iframe[title*=\"Netlify\" i],[id*=\"netlify\" i],[class*=\"netlify\" i],iframe[src*=\"netlify\"]{display:none!important}';document.head.appendChild(css);function hide(){document.querySelectorAll('#nl-badge-frame,iframe[title*=\"Netlify\" i],iframe[src*=\"netlify\"],[id*=\"netlify\" i],[class*=\"netlify\" i]').forEach(function(e){e.style.display='none';});document.querySelectorAll('a,div,span').forEach(function(e){if(e.children.length===0&&e.textContent&&e.textContent.indexOf('Powered by Netlify')!==-1){e.style.display='none';}});}hide();new MutationObserver(hide).observe(document.documentElement,{childList:true,subtree:true});})();"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
