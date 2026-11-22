@@ -20,10 +20,15 @@ jobs:
         with:
           gradle-version: "8.5"
 
-      - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+      - name: Build debug APKs (Arabic + English)
+        run: gradle assembleArDebug assembleEnDebug --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wamda-app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: wamda-app-ar-debug
+          path: app/build/outputs/apk/ar/debug/app-ar-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libya-pulse-app-en-debug
+          path: app/build/outputs/apk/en/debug/app-en-debug.apk
