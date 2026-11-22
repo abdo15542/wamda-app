@@ -13,15 +13,20 @@ import android.widget.Button
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.google.android.material.bottomnavigation.BottomNavigationView
 
 /**
- * Wamda Libya news app: a WebView shell around the two live sites.
- * - Arabic tab: https://wamdalibya.netlify.app/
- * - English tab: https://abdo15542.github.io/libyapulse/
- * New articles appear automatically — the app always loads the live sites.
+ * One site per app — the site comes from the build flavor (BuildConfig.SITE_URL):
+ * - ar flavor: Wamda Libya (Arabic) — https://wamdalibya.netlify.app/
+ * - en flavor: Libya Pulse (English) — https://abdo15542.github.io/libyapulse/
+ * Each flavor is its own installable app (own package, own name, own icon
+ * label). New articles appear automatically — the app always loads the
+ * live site.
  * The "WamdaApp/1.0" user-agent suffix lets the sites hide AdSense ads
  * inside the app (AdSense is for the web; apps must not show it).
+ * The Netlify "Powered by" badge is hidden inside the app with injected
+ * CSS/JS (it still shows on the website in a browser — that is Netlify's
+ * free-tier mark and can only be removed from the site itself by moving
+ * the site off Netlify's free hosting).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -29,15 +34,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var splash: View
     private lateinit var offlineView: View
-    private lateinit var bottomNav: BottomNavigationView
-
-    private var currentUrl = AR_URL
 
     companion object {
-        const val AR_URL = "https://wamdalibya.netlify.app/"
-        const val EN_URL = "https://abdo15542.github.io/libyapulse/"
-        const val PREFS = "wamda_prefs"
-        const val KEY_TAB = "last_tab"
+        // Hides the Netlify "Powered by" badge (and anything Netlify-branded)
+        // inside the app. Runs on every page load and watches for late
+        // injections, so the badge never flashes on screen.
+        const val HIDE_BADGE_JS = "(function(){var css=document.createElement('style');css.textContent='[id*=\"netlify\" i],[class*=\"netlify\" i],iframe[src*=\"netlify\"]{display:none!important}';document.head.appendChild(css);function hide(){document.querySelectorAll('iframe[src*=\"netlify\"],[id*=\"netlify\" i],[class*=\"netlify\" i]').forEach(function(e){e.style.display='none';});document.querySelectorAll('a,div,span').forEach(function(e){if(e.children.length===0&&e.textContent&&e.textContent.indexOf('Powered by Netlify')!==-1){e.style.display='none';}});}hide();new MutationObserver(hide).observe(document.documentElement,{childList:true,subtree:true});})();"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -49,7 +51,6 @@ class MainActivity : AppCompatActivity() {
         swipeRefresh = findViewById(R.id.swipe_refresh)
         splash = findViewById(R.id.splash)
         offlineView = findViewById(R.id.offline_view)
-        bottomNav = findViewById(R.id.bottom_nav)
 
         swipeRefresh.setColorSchemeColors(getColor(R.color.gold))
 
@@ -71,6 +72,8 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 swipeRefresh.isRefreshing = false
                 splash.visibility = View.GONE
+                // Hide the Netlify badge inside the app.
+                view?.evaluateJavascript(HIDE_BADGE_JS, null)
             }
 
             override fun onReceivedError(
@@ -99,26 +102,6 @@ class MainActivity : AppCompatActivity() {
             webView.reload()
         }
 
-        // Restore the last tab (Arabic by default).
-        val savedTab =
-            getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TAB, AR_URL) ?: AR_URL
-        currentUrl = savedTab
-        bottomNav.selectedItemId = if (savedTab == EN_URL) R.id.nav_en else R.id.nav_ar
-
-        bottomNav.setOnItemSelectedListener { item ->
-            val url = when (item.itemId) {
-                R.id.nav_en -> EN_URL
-                else -> AR_URL
-            }
-            if (url != currentUrl) {
-                currentUrl = url
-                getSharedPreferences(PREFS, MODE_PRIVATE)
-                    .edit().putString(KEY_TAB, url).apply()
-                webView.loadUrl(url)
-            }
-            true
-        }
-
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) {
@@ -130,6 +113,6 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        webView.loadUrl(savedTab)
+        webView.loadUrl(BuildConfig.SITE_URL)
     }
 }
