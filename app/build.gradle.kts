@@ -60,5 +60,8 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     // AdMob — one small adaptive banner at the bottom only (test IDs for now).
-    implementation("com.google.android.gms:play-services-ads:25.5.0")
+    // Pinned to 23.6.0: 24.x needs Kotlin 2.1+ (project is on Kotlin 1.9.22)
+    // and a newer compileSdk; 23.6.0 builds with this toolchain. Do not bump
+    // without also upgrading Kotlin and compileSdk.
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
 }
