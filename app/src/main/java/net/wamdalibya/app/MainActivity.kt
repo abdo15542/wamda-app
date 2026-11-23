@@ -32,9 +32,12 @@ import com.google.android.gms.ads.MobileAds
  * free-tier mark and can only be removed from the site itself by moving
  * the site off Netlify's free hosting).
  * AdMob: ONE small adaptive banner fixed at the bottom of the screen only
- * (Google test ad IDs for now; real IDs come when Abdoo creates his AdMob
- * account). No interstitials, no app-open ads, no popups — nothing ever
- * covers the articles or interrupts reading.
+ * (Abdoo's real IDs, per flavor via BuildConfig.ADMOB_BANNER_ID — AR and
+ * EN have different banner units). No interstitials, no app-open ads, no
+ * popups — nothing ever covers the articles or interrupts reading.
+ * NOTE: the AdMob account is still under Google review (~24h); the banner
+ * units stay inactive until it passes, so the apps may show limited or no
+ * real ads until then — that is expected, not a build failure.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -45,10 +48,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adView: AdView
 
     companion object {
-        // Google's official TEST banner unit ID. Replace with Abdoo's real
-        // unit ID when his AdMob account exists (and the test app ID in the
-        // manifest with his real app ID) — then rebuild.
-        const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
         // Hides the Netlify "Powered by" badge (and anything Netlify-branded)
         // inside the app. Runs on every page load and watches for late
         // injections, so the badge never flashes on screen.
@@ -69,7 +68,8 @@ class MainActivity : AppCompatActivity() {
         MobileAds.initialize(this)
         adView = findViewById(R.id.ad_view)
         adView.setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, getAdWidthDp()))
-        adView.adUnitId = TEST_BANNER_AD_UNIT_ID
+        // Real banner unit ID for this flavor (BuildConfig.ADMOB_BANNER_ID).
+        adView.adUnitId = BuildConfig.ADMOB_BANNER_ID
         adView.loadAd(AdRequest.Builder().build())
 
         swipeRefresh.setColorSchemeColors(getColor(R.color.gold))

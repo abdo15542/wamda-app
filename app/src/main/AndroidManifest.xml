@@ -11,11 +11,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Wamda">
-        <!-- AdMob test app ID (Google's official test ID). Real app ID
-             replaces this when Abdoo creates his AdMob account. -->
+        <!-- AdMob app ID — per flavor via manifestPlaceholders (admobAppId)
+             in app/build.gradle.kts: AR and EN have different real IDs. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="${admobAppId}" />
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"

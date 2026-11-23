@@ -29,6 +29,9 @@ android {
             versionCode = 4
             versionName = "1.1.2"
             buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
+            // Real AdMob IDs (Abdoo's account, pub-6317687886565811).
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-6317687886565811~6841921039"
+            buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-6317687886565811/7459586873\"")
         }
         create("en") {
             dimension = "language"
@@ -36,6 +39,9 @@ android {
             versionCode = 2
             versionName = "1.0.1"
             buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/libyapulse/\"")
+            // Real AdMob IDs (Abdoo's account, pub-6317687886565811).
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-6317687886565811~4758683178"
+            buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-6317687886565811/3445601506\"")
         }
     }
 
@@ -59,7 +65,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    // AdMob — one small adaptive banner at the bottom only (test IDs for now).
+    // AdMob — one small adaptive banner at the bottom only (real IDs,
+    // per flavor, in the productFlavors blocks above).
     // Pinned to 23.6.0: 24.x needs Kotlin 2.1+ (project is on Kotlin 1.9.22)
     // and a newer compileSdk; 23.6.0 builds with this toolchain. Do not bump
     // without also upgrading Kotlin and compileSdk.
