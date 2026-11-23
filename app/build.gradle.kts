@@ -26,9 +26,9 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 3
-            versionName = "1.1.1"
-            buildConfigField("String", "SITE_URL", "\"https://wamdalibya.netlify.app/\"")
+            versionCode = 4
+            versionName = "1.1.2"
+            buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
         }
         create("en") {
             dimension = "language"
