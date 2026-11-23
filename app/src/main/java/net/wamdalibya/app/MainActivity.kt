@@ -13,10 +13,14 @@ import android.widget.Button
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.MobileAds
 
 /**
  * One site per app — the site comes from the build flavor (BuildConfig.SITE_URL):
- * - ar flavor: Wamda Libya (Arabic) — https://wamdalibya.netlify.app/
+ * - ar flavor: Wamda Libya (Arabic) — https://abdo15542.github.io/wamdalibya/
  * - en flavor: Libya Pulse (English) — https://abdo15542.github.io/libyapulse/
  * Each flavor is its own installable app (own package, own name, own icon
  * label). New articles appear automatically — the app always loads the
@@ -27,6 +31,10 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
  * CSS/JS (it still shows on the website in a browser — that is Netlify's
  * free-tier mark and can only be removed from the site itself by moving
  * the site off Netlify's free hosting).
+ * AdMob: ONE small adaptive banner fixed at the bottom of the screen only
+ * (Google test ad IDs for now; real IDs come when Abdoo creates his AdMob
+ * account). No interstitials, no app-open ads, no popups — nothing ever
+ * covers the articles or interrupts reading.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -34,8 +42,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var splash: View
     private lateinit var offlineView: View
+    private lateinit var adView: AdView
 
     companion object {
+        // Google's official TEST banner unit ID. Replace with Abdoo's real
+        // unit ID when his AdMob account exists (and the test app ID in the
+        // manifest with his real app ID) — then rebuild.
+        const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
         // Hides the Netlify "Powered by" badge (and anything Netlify-branded)
         // inside the app. Runs on every page load and watches for late
         // injections, so the badge never flashes on screen.
@@ -51,6 +64,13 @@ class MainActivity : AppCompatActivity() {
         swipeRefresh = findViewById(R.id.swipe_refresh)
         splash = findViewById(R.id.splash)
         offlineView = findViewById(R.id.offline_view)
+
+        // AdMob: one small adaptive banner at the bottom only.
+        MobileAds.initialize(this)
+        adView = findViewById(R.id.ad_view)
+        adView.setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, getAdWidthDp()))
+        adView.adUnitId = TEST_BANNER_AD_UNIT_ID
+        adView.loadAd(AdRequest.Builder().build())
 
         swipeRefresh.setColorSchemeColors(getColor(R.color.gold))
 
@@ -114,5 +134,11 @@ class MainActivity : AppCompatActivity() {
         })
 
         webView.loadUrl(BuildConfig.SITE_URL)
+    }
+
+    // Screen width in dp, for the anchored adaptive banner size.
+    private fun getAdWidthDp(): Int {
+        val metrics = resources.displayMetrics
+        return (metrics.widthPixels / metrics.density).toInt()
     }
 }

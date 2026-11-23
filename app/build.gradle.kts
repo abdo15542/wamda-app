@@ -59,4 +59,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    // AdMob — one small adaptive banner at the bottom only (test IDs for now).
+    implementation("com.google.android.gms:play-services-ads:25.5.0")
 }
