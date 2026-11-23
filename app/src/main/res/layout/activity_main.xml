@@ -102,10 +102,12 @@
 
     </FrameLayout>
 
-    <!-- AdMob adaptive banner, bottom only. Ad size and unit ID are set
-         in MainActivity (test unit ID for now). -->
-    <com.google.android.gms.ads.AdView
-        android:id="@+id/ad_view"
+    <!-- AdMob adaptive banner, bottom only. The AdView is created in
+         MainActivity (programmatically — an AdView inflated from XML
+         without app:adSize shows "Required XML attribute adSize was
+         missing" instead of an ad). Real unit ID per flavor. -->
+    <FrameLayout
+        android:id="@+id/ad_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 

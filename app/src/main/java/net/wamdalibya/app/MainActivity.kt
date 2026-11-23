@@ -10,6 +10,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -65,11 +66,16 @@ class MainActivity : AppCompatActivity() {
         offlineView = findViewById(R.id.offline_view)
 
         // AdMob: one small adaptive banner at the bottom only.
+        // Created programmatically: an AdView inflated from XML without
+        // app:adSize fails to load ("Required XML attribute adSize was
+        // missing" — seen on Abdoo's phone 2026-11-23). setAdSize must
+        // run before loadAd on a programmatic AdView.
         MobileAds.initialize(this)
-        adView = findViewById(R.id.ad_view)
+        adView = AdView(this)
         adView.setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, getAdWidthDp()))
         // Real banner unit ID for this flavor (BuildConfig.ADMOB_BANNER_ID).
         adView.adUnitId = BuildConfig.ADMOB_BANNER_ID
+        findViewById<FrameLayout>(R.id.ad_container).addView(adView)
         adView.loadAd(AdRequest.Builder().build())
 
         swipeRefresh.setColorSchemeColors(getColor(R.color.gold))
