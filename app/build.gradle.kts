@@ -60,9 +60,25 @@ android {
         }
     }
 
+    // Release signing — ONE stable keystore for every build, so updates
+    // always install in place. The keystore itself is NOT in the repo:
+    // CI decodes it from the KEYSTORE_BASE64 repo secret into
+    // app/release.keystore (see .github/workflows/build-apk.yml) and
+    // passes the passwords via env vars. Never commit the keystore or
+    // any password. Debug builds are unaffected (they use the debug key).
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("KEYSTORE_FILE") ?: "release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
