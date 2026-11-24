@@ -30,6 +30,9 @@ import com.google.android.gms.ads.MobileAds
  * ("Our services aren't available right now", incl. "Restore Gradle
  * distribution 8.5 failed") — the same transient pattern as the v1 build.
  * This commit only re-triggers CI; no code changed.
+ * UPDATE: re-trigger run 45438796984 failed identically (same cache
+ * errors, still no compiler error); githubstatus.com now reports
+ * "All Systems Operational", so this is one more re-trigger attempt.
  */
 class MainActivity : ComponentActivity() {
 
