@@ -75,7 +75,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refresh()
     }
 
-    private fun setArticles(list: List<FeedArticle>) {
+    private fun updateArticles(list: List<FeedArticle>) {
         articles = list
         categories = list
             .map { it.category to it.categoryName }
@@ -89,7 +89,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val cached = repo.fetchIndexCached()
             val cachedAnn = repo.fetchAnnouncementsCached()
             withContext(Dispatchers.Main) {
-                if (cached != null) setArticles(cached)
+                if (cached != null) updateArticles(cached)
                 if (cachedAnn.latestVersionCode != 0 || cachedAnn.items.isNotEmpty()) {
                     announcements = cachedAnn
                 }
@@ -108,7 +108,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val ann = annDeferred.await()
             withContext(Dispatchers.Main) {
                 if (fresh != null) {
-                    setArticles(fresh)
+                    updateArticles(fresh)
                     isOffline = false
                 } else {
                     // Network failed: keep showing the cached list (if any)
