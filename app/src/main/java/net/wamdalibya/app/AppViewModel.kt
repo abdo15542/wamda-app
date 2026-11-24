@@ -1,5 +1,6 @@
 package net.wamdalibya.app
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.getValue
@@ -31,11 +32,16 @@ sealed class Screen {
  * composed; search/category filtering still runs over the full list.
  *
  * SOCIAL (v3): likes and comments are SHARED through Firebase
- * (Firestore + Anonymous Auth, see SocialRepository). The like COUNT
- * always comes from the server; the per-device SharedPreferences set is
- * only the local mirror of the heart state, so the heart still shows
- * correctly offline. The display name for comments is chosen once by
- * the user on the device and stored locally.
+ * (Firestore + Anonymous Auth, see SocialRepository). The heart AND the
+ * count flip optimistically on tap — the UI shows the server value plus
+ * a pending +1/-1 delta, so the number moves instantly; the server
+ * listener confirms the count and clears the delta, so the count always
+ * converges to the server value (a failed write rolls both back). The
+ * per-device SharedPreferences set is only the local mirror of the
+ * heart state, so the heart still shows correctly offline. The display
+ * name for comments is chosen once by the user on the device and stored
+ * locally — or taken from the Google profile when the user signs in
+ * with Google (v3.1, see GoogleSignIn.kt).
  */
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -104,6 +110,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var commentError by mutableStateOf(false)
         private set
+    /** Google display name when signed in with Google; null while anonymous. */
+    var googleDisplayName by mutableStateOf<String?>(null)
+        private set
+    /** True when the current Firebase user is a linked Google account. */
+    var isGoogleSignedIn by mutableStateOf(false)
+        private set
+
+    /**
+     * Optimistic like-count deltas per slug (+1 when the user just
+     * liked, -1 when they just unliked). The UI shows serverCount +
+     * delta, so the number moves the instant the heart is tapped; the
+     * delta clears when the server value moves past the value seen at
+     * tap time (see clearConfirmedDeltas) — the count always converges
+     * to the server value and never double-counts.
+     */
+    private var likeDeltas by mutableStateOf<Map<String, Int>>(emptyMap())
+    /** Server like count seen when each delta was created. */
+    private var likeDeltaBase by mutableStateOf<Map<String, Long>>(emptyMap())
 
     private var socialRegs = mutableListOf<ListenerRegistration>()
     private var likedReg: ListenerRegistration? = null
@@ -118,6 +142,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) {
                 uid = id
                 if (id != null) attachLikedListener()
+                refreshGoogleState()
             }
         }
     }
@@ -192,20 +217,66 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val fetched = social.fetchCounts(slugs)
             if (fetched.isNotEmpty()) {
-                withContext(Dispatchers.Main) { listCounts = listCounts + fetched }
+                withContext(Dispatchers.Main) {
+                    listCounts = listCounts + fetched
+                    clearConfirmedDeltas(fetched.mapValues { it.value.likes })
+                }
             }
         }
     }
 
+    /** Count the UI shows for a slug: server value + any pending optimistic delta. */
+    fun displaySocial(slug: String, server: ArticleSocial): ArticleSocial {
+        val delta = likeDeltas[slug] ?: 0
+        return if (delta == 0) server
+        else server.copy(likes = (server.likes + delta).coerceAtLeast(0L))
+    }
+
     /**
-     * Shared like toggle. The heart flips optimistically; the COUNT
-     * always comes from the server listener. When the transaction fails
-     * (offline), the heart flips back — the local set is only a mirror,
-     * never the truth.
+     * Drops optimistic deltas whose server value has moved past the value
+     * seen at tap time — the server has incorporated the write (or a
+     * concurrent like/unlike), so the plain server count is now correct.
+     * Called on every server update (detail listener + list batch reads).
+     * Must run on the Main thread (it mutates State).
+     */
+    private fun clearConfirmedDeltas(server: Map<String, Long>) {
+        if (likeDeltas.isEmpty()) return
+        var nextDeltas = likeDeltas
+        var nextBase = likeDeltaBase
+        var changed = false
+        for ((slug, _) in likeDeltas) {
+            val base = likeDeltaBase[slug]
+            val now = server[slug]
+            if (base != null && now != null && now != base) {
+                nextDeltas = nextDeltas - slug
+                nextBase = nextBase - slug
+                changed = true
+            }
+        }
+        if (changed) {
+            likeDeltas = nextDeltas
+            likeDeltaBase = nextBase
+        }
+    }
+
+    /** Server like count currently on screen for a slug (0 when unknown). */
+    private fun serverLikesFor(slug: String): Long =
+        if (slug == socialSlug) detailSocial.likes
+        else listCounts[slug]?.likes ?: 0L
+
+    /**
+     * Shared like toggle. The heart AND the count flip optimistically —
+     * the count shows server + pending delta, so the number moves the
+     * instant the heart is tapped, like the big apps; the write goes to
+     * Firestore in the background and the delta clears when the server
+     * value confirms it. When the write fails (offline), BOTH flip back
+     * — the local state is only a mirror, never the truth.
      */
     fun toggleLike(slug: String) {
         val wasLiked = slug in likedSlugs
         val currentUid = uid
+        val prevDelta = likeDeltas[slug] ?: 0
+        val prevBase = likeDeltaBase[slug]
         viewModelScope.launch(Dispatchers.IO) {
             val signedIn = currentUid ?: social.ensureSignedIn()
             if (signedIn == null) return@launch
@@ -217,19 +288,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             val id = signedIn
             withContext(Dispatchers.Main) {
+                // Optimistic heart + count, together.
                 val next = if (wasLiked) likedSlugs - slug else likedSlugs + slug
                 likedSlugs = next
                 likesPrefs.edit().putStringSet("liked", next).apply()
+                val step = if (wasLiked) -1 else 1
+                val newDelta = prevDelta + step
+                if (newDelta == 0) {
+                    likeDeltas = likeDeltas - slug
+                    likeDeltaBase = likeDeltaBase - slug
+                } else {
+                    val base = prevBase ?: serverLikesFor(slug)
+                    likeDeltas = likeDeltas + (slug to newDelta)
+                    likeDeltaBase = likeDeltaBase + (slug to base)
+                }
             }
             val result = social.toggleLike(slug, id)
             withContext(Dispatchers.Main) {
                 if (result == null) {
-                    // Failed (offline): revert the heart.
+                    // Failed (offline): revert heart AND count.
                     val reverted = if (wasLiked) likedSlugs + slug else likedSlugs - slug
                     likedSlugs = reverted
                     likesPrefs.edit().putStringSet("liked", reverted).apply()
+                    if (prevDelta == 0) {
+                        likeDeltas = likeDeltas - slug
+                        likeDeltaBase = likeDeltaBase - slug
+                    } else {
+                        likeDeltas = likeDeltas + (slug to prevDelta)
+                        if (prevBase != null) {
+                            likeDeltaBase = likeDeltaBase + (slug to prevBase)
+                        }
+                    }
                 } else {
-                    // Reconcile with the server's answer.
+                    // Reconcile the heart with the server's answer.
+                    // The count delta stays until the server value
+                    // confirms it — see clearConfirmedDeltas.
                     val reconciled = if (result) likedSlugs + slug else likedSlugs - slug
                     likedSlugs = reconciled
                     likesPrefs.edit().putStringSet("liked", reconciled).apply()
@@ -253,6 +346,62 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (clean.isEmpty()) return
         displayName = clean
         profilePrefs.edit().putString("name", clean).apply()
+    }
+
+    // ---- Social: Google Sign-In (v3.1) ----
+
+    /** Re-reads the Firebase user: Google name/state after any sign-in/out. */
+    fun refreshGoogleState() {
+        val google = social.googleUser()
+        isGoogleSignedIn = google != null
+        googleDisplayName = google?.second
+        if (google != null) maybePrefillNameFromGoogle(google.second)
+    }
+
+    /**
+     * One-tap Google sign-in (called from the account dialog). Links the
+     * Google account to the current anonymous user, so the uid — and all
+     * likes/comments — survive. onResult(true) = signed in.
+     */
+    fun requestGoogleSignIn(activity: Activity, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = signInWithGoogle(activity)
+            withContext(Dispatchers.Main) {
+                if (result != null) {
+                    uid = result.uid
+                    refreshGoogleState()
+                    attachLikedListener()
+                }
+                onResult(result != null)
+            }
+        }
+    }
+
+    /** Signs out of Google and back into a fresh anonymous user. */
+    fun requestGoogleSignOut(onDone: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            signOutOfGoogle(getApplication<Application>().applicationContext)
+            val id = social.ensureSignedIn()
+            withContext(Dispatchers.Main) {
+                uid = id
+                isGoogleSignedIn = false
+                googleDisplayName = null
+                if (id != null) attachLikedListener()
+                onDone()
+            }
+        }
+    }
+
+    /**
+     * Prefills the comment nickname from the Google profile — but ONLY
+     * when the user never picked a nickname themselves. A name the user
+     * chose (or changed) always wins.
+     */
+    private fun maybePrefillNameFromGoogle(name: String?) {
+        val clean = name?.trim()?.take(30).orEmpty()
+        if (clean.isEmpty()) return
+        if (profilePrefs.getString("name", null) != null) return
+        saveDisplayName(clean)
     }
 
     /** Posts a comment in the app. onResult(true) = queued/sent. */
@@ -305,7 +454,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         detailLiked = slug in likedSlugs
         comments = emptyList()
         commentsLoading = true
-        socialRegs += social.observeArticle(slug) { detailSocial = it }
+        socialRegs += social.observeArticle(slug) { social ->
+            detailSocial = social
+            clearConfirmedDeltas(mapOf(slug to social.likes))
+        }
         socialRegs += social.observeComments(slug) {
             comments = it
             commentsLoading = false

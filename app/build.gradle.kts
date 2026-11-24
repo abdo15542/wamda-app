@@ -37,8 +37,8 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 10
-            versionName = "1.4.0"
+            versionCode = 11
+            versionName = "1.5.0"
             // Native content feed (JSON) — the app reads articles straight
             // from GitHub Pages; no website/WebView involved.
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
@@ -51,8 +51,8 @@ android {
         create("en") {
             dimension = "language"
             applicationId = "net.libyapulse.app"
-            versionCode = 8
-            versionName = "1.3.0"
+            versionCode = 9
+            versionName = "1.4.0"
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/techpulse/\"")
             buildConfigField("boolean", "IS_ARABIC", "false")
             buildConfigField("String", "FACEBOOK_PAGE_URL", "\"https://www.facebook.com/profile.php?id=61596701491859\"")
@@ -162,4 +162,19 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     // Task.await() for Firebase calls (pairs with Kotlin 1.9.22).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    // Google Sign-In (Credential Manager, one-tap) — v3.1. Versions
+    // verified to exist on Google Maven (they are NOT on Maven Central):
+    // credentials 1.3.0 + googleid 1.1.1, both stable, era-matched to
+    // compileSdk 34 / Kotlin 1.9.x. NOTE: getCredential in 1.3.0 takes
+    // (Context, GetCredentialRequest) — the (request, Activity) overload
+    // only exists from 1.5.0; and googleid 1.1.1 has NO
+    // preferImmediatelyAvailableCredentials() — the silent path uses
+    // setAutoSelectEnabled(true) instead (see GoogleSignIn.kt).
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    // Material icons (account icon in the header); version from the
+    // Compose BOM above.
+    implementation("androidx.compose.material:material-icons-core")
 }

@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material.ExperimentalMaterialApi::class)
 package net.wamdalibya.app
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -28,6 +29,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,6 +39,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -126,36 +131,57 @@ fun WamdaApp(viewModel: AppViewModel) {
         ) {
             val screen = viewModel.screen
             val context = LocalContext.current
+            var showAccountDialog by remember { mutableStateOf(false) }
             BackHandler(enabled = screen is Screen.Article) { viewModel.goHome() }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                // Header: brand name + tagline + follow-on-Facebook button.
-                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        color = Color.White,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = stringResource(R.string.app_tagline),
-                        color = brandAccent,
-                        fontSize = 14.sp
-                    )
-                    TextButton(
-                        onClick = { openUrl(context, BuildConfig.FACEBOOK_PAGE_URL) },
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.padding(top = 2.dp)
-                    ) {
+                // Header: brand name + tagline + follow-on-Facebook button,
+                // with the account (Google sign-in) button top-right.
+                Row(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.follow_facebook),
+                            text = stringResource(R.string.app_name),
+                            color = Color.White,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = stringResource(R.string.app_tagline),
                             color = brandAccent,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
+                        )
+                        TextButton(
+                            onClick = { openUrl(context, BuildConfig.FACEBOOK_PAGE_URL) },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.follow_facebook),
+                                color = brandAccent,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                    IconButton(onClick = { showAccountDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.AccountCircle,
+                            contentDescription = stringResource(R.string.account_title),
+                            tint = if (viewModel.isGoogleSignedIn) brandAccent else Color(0xFFB0BEC5),
+                            modifier = Modifier.size(32.dp)
                         )
                     }
+                }
+                if (showAccountDialog) {
+                    AccountDialog(
+                        viewModel = viewModel,
+                        onDismiss = { showAccountDialog = false }
+                    )
                 }
                 Box(modifier = Modifier.weight(1f)) {
                     when (val s = screen) {
@@ -168,6 +194,87 @@ fun WamdaApp(viewModel: AppViewModel) {
             }
         }
     }
+}
+
+/**
+ * Account dialog (v3.1): Google Sign-In. One tap once, then automatic —
+ * the device links the Google account to the anonymous user, so likes
+ * and comments survive. When signed in it shows the Google name and a
+ * sign-out option instead.
+ */
+@Composable
+private fun AccountDialog(viewModel: AppViewModel, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+    var signingIn by remember { mutableStateOf(false) }
+    var signInFailed by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.account_title)) },
+        text = {
+            Column {
+                if (viewModel.isGoogleSignedIn) {
+                    Text(
+                        text = stringResource(
+                            R.string.account_signed_in_as,
+                            viewModel.googleDisplayName ?: ""
+                        ),
+                        fontSize = 14.sp
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.account_sign_in_hint),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    if (signInFailed) {
+                        Text(
+                            text = stringResource(R.string.account_signin_error),
+                            color = Color(0xFFFF8A80),
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (viewModel.isGoogleSignedIn) {
+                TextButton(
+                    onClick = { viewModel.requestGoogleSignOut { onDismiss() } }
+                ) {
+                    Text(stringResource(R.string.account_sign_out), color = brandAccent)
+                }
+            } else {
+                Button(
+                    onClick = {
+                        val act = activity ?: return@Button
+                        if (signingIn) return@Button
+                        signingIn = true
+                        signInFailed = false
+                        viewModel.requestGoogleSignIn(act) { ok ->
+                            signingIn = false
+                            if (ok) onDismiss() else signInFailed = true
+                        }
+                    },
+                    enabled = !signingIn && activity != null,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = brandAccent,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text(
+                        if (signingIn) stringResource(R.string.account_signing_in)
+                        else stringResource(R.string.account_sign_in)
+                    )
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dismiss))
+            }
+        }
+    )
 }
 
 @Composable
@@ -470,7 +577,10 @@ private fun NewsFeed(viewModel: AppViewModel) {
                         items(shown, key = { it.slug }) { article ->
                             ArticleRow(
                                 article = article,
-                                social = viewModel.listCounts[article.slug],
+                                social = viewModel.displaySocial(
+                                    article.slug,
+                                    viewModel.listCounts[article.slug] ?: ArticleSocial()
+                                ),
                                 liked = viewModel.isLiked(article.slug),
                                 onLike = { viewModel.toggleLike(article.slug) },
                                 onClick = { viewModel.openArticle(article.slug) }
@@ -693,9 +803,10 @@ private fun ArticleContent(viewModel: AppViewModel, slug: String) {
                             )
                         }
                         // Shared like + in-app comments (v3). The like
-                        // COUNT comes from the server for everyone; the
-                        // comments live under the article INSIDE the app —
-                        // nothing here opens Facebook any more.
+                        // count is optimistic (server + pending tap) and
+                        // converges to the server value; the comments
+                        // live under the article INSIDE the app — nothing
+                        // here opens Facebook any more.
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -716,7 +827,7 @@ private fun ArticleContent(viewModel: AppViewModel, slug: String) {
  */
 @Composable
 private fun SocialSection(viewModel: AppViewModel, detail: ArticleDetail) {
-    val social = viewModel.detailSocial
+    val social = viewModel.displaySocial(detail.slug, viewModel.detailSocial)
     val liked = viewModel.detailLiked
     var draft by remember(detail.slug) { mutableStateOf("") }
     var showNameDialog by remember { mutableStateOf(false) }

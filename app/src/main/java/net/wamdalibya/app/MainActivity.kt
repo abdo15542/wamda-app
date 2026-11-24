@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.ads.MobileAds
@@ -52,6 +53,14 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val vm: AppViewModel = viewModel()
+            // Silent Google re-link (v3.1): only when the device linked
+            // Google before; shows no UI and stays anonymous on failure.
+            // Firebase Auth also persists the Google user across launches,
+            // so this is belt-and-braces for token refresh.
+            LaunchedEffect(Unit) {
+                val linked = trySilentGoogleLink(this@MainActivity)
+                if (linked != null) vm.refreshGoogleState()
+            }
             WamdaApp(vm)
         }
     }

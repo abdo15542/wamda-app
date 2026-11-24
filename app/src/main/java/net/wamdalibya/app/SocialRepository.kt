@@ -26,10 +26,14 @@ import kotlinx.coroutines.tasks.await
  * by the user on the device (stored in SharedPreferences) and is only a
  * label on their comments.
  *
- * All calls are failure-safe: they return null/false/empty on any error
- * (offline, Firestore down) and must never crash the app. The like
- * COUNT shown in the UI always comes from the server listener, never
- * from a local guess.
+ * v3.1: a Google account can be LINKED to the anonymous user (see
+ * GoogleSignIn.kt) — the uid is preserved, so likes/comments survive.
+ * The like COUNT shown in the UI is optimistic: the ViewModel shows the
+ * server value plus a pending +1/-1 the moment the user taps, and the
+ * server listener confirms (and clears) the delta when the new count
+ * arrives — the count always converges to the server value, and a
+ * failed write rolls the displayed count back. Nothing here is a local
+ * guess presented as truth: the server stays the source of truth.
  */
 data class ArticleSocial(val likes: Long = 0, val comments: Long = 0)
 
@@ -60,36 +64,45 @@ class SocialRepository {
     }
 
     /**
-     * Toggles this user's like on an article, atomically:
-     * creates/deletes the liker doc and increments/decrements the counter
-     * in one transaction. Returns the NEW liked state, or null on failure
-     * (offline — the caller must leave the local state untouched).
+     * The signed-in Google user (uid + display name), or null when the
+     * device is anonymous / signed out. Used for the account UI and for
+     * prefilling the comment nickname from the Google profile (v3.1).
+     */
+    fun googleUser(): Pair<String, String?>? {
+        val user = auth.currentUser ?: return null
+        return if (user.isAnonymous) null else user.uid to user.displayName
+    }
+
+    /**
+     * Toggles this user's like on an article, in ONE batch write:
+     * creates/deletes the liker doc and moves the counter with an atomic
+     * server-side increment — no transaction, no contention retries, one
+     * round trip. That (together with the optimistic count in the
+     * ViewModel) is what makes the tap feel instant. The counter is
+     * merge-set, so a missing article doc is created correctly.
+     * Returns the NEW liked state, or null on failure (offline — the
+     * caller must roll the local state back).
      */
     suspend fun toggleLike(slug: String, uid: String): Boolean? {
         val articleRef = db.collection("articles").document(slug)
         val likerRef = articleRef.collection("likers").document(uid)
         return try {
-            db.runTransaction { tx ->
-                val articleSnap = tx.get(articleRef)
-                val likerSnap = tx.get(likerRef)
-                val liked = likerSnap.exists()
-                val likes = articleSnap.getLong("likes") ?: 0L
-                val comments = articleSnap.getLong("comments") ?: 0L
+            // One read decides the direction; the counter itself moves
+            // with FieldValue.increment, so concurrent likes can never
+            // lose a count. (A liker doc only exists if the like path
+            // ran, which also created the article doc — so the -1
+            // merge-set below always finds an existing counter.)
+            val liked = likerRef.get().await().exists()
+            db.batch().apply {
                 if (liked) {
-                    tx.delete(likerRef)
-                    if (articleSnap.exists()) {
-                        tx.update(articleRef, "likes", (likes - 1).coerceAtLeast(0L))
-                    }
+                    delete(likerRef)
+                    set(articleRef, mapOf("likes" to FieldValue.increment(-1)), SetOptions.merge())
                 } else {
-                    tx.set(likerRef, mapOf("at" to FieldValue.serverTimestamp()))
-                    if (articleSnap.exists()) {
-                        tx.update(articleRef, "likes", likes + 1)
-                    } else {
-                        tx.set(articleRef, mapOf("likes" to 1L, "comments" to comments))
-                    }
+                    set(likerRef, mapOf("at" to FieldValue.serverTimestamp()))
+                    set(articleRef, mapOf("likes" to FieldValue.increment(1)), SetOptions.merge())
                 }
-                !liked
-            }.await()
+            }.commit().await()
+            !liked
         } catch (e: Exception) {
             null
         }
