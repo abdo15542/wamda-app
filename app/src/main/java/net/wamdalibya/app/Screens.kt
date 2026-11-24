@@ -1,5 +1,7 @@
 package net.wamdalibya.app
 
+@file:OptIn(androidx.compose.material.ExperimentalMaterialApi::class)
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
