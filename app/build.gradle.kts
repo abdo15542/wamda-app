@@ -21,9 +21,11 @@ android {
     }
 
     composeOptions {
-        // Pairs with Kotlin 1.9.24 (top-level build file) and
-        // Compose BOM 2024.04.01. Do not bump one without the others.
-        kotlinCompilerExtensionVersion = "1.5.14"
+        // Pairs with Kotlin 1.9.22 (top-level build file) and
+        // Compose BOM 2024.02.00. Era-matched to AGP 8.3.2: its
+        // Compose-compiler table predates compiler 1.5.14, so do not bump
+        // any of the three without also upgrading AGP.
+        kotlinCompilerExtensionVersion = "1.5.10"
     }
 
     // Two separate native apps from one codebase — one per brand, never mixed.
@@ -76,9 +78,9 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
 
-    // Jetpack Compose — BOM 2024.04.01 pairs with Kotlin 1.9.24 and
-    // Compose compiler 1.5.14 (see composeOptions above).
-    val composeBom = platform("androidx.compose:compose-bom:2024.04.01")
+    // Jetpack Compose — BOM 2024.02.00 pairs with Kotlin 1.9.22 and
+    // Compose compiler 1.5.10 (see composeOptions above).
+    val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -86,15 +88,16 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material:material") // pull-to-refresh
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.activity:activity-compose")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // Coil — article images.
-    implementation("io.coil-kt:coil-compose:2.7.0")
+    // Coil — article images. 2.4.0 is era-matched to this toolchain
+    // (same AsyncImage API as later 2.x releases).
+    implementation("io.coil-kt:coil-compose:2.4.0")
 
     // AdMob — one small adaptive banner at the bottom only (real IDs,
     // per flavor, in the productFlavors blocks above).
