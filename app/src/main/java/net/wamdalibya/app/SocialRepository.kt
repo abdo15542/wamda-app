@@ -34,6 +34,13 @@ import kotlinx.coroutines.tasks.await
  * arrives — the count always converges to the server value, and a
  * failed write rolls the displayed count back. Nothing here is a local
  * guess presented as truth: the server stays the source of truth.
+ *
+ * v3.2: Like and Comment are GATED behind Google sign-in — the gate
+ * lives in AppViewModel.requireGoogleSignIn / Screens.kt, not here:
+ * this repository only ever writes for the uid it is given, and the
+ * Firestore rules already allow any authenticated uid (anonymous or
+ * Google) to write its own docs, so no rules change was needed.
+ * Reading (counts, comments, articles) stays anonymous and open.
  */
 data class ArticleSocial(val likes: Long = 0, val comments: Long = 0)
 

@@ -42,6 +42,11 @@ sealed class Screen {
  * name for comments is chosen once by the user on the device and stored
  * locally — or taken from the Google profile when the user signs in
  * with Google (v3.1, see GoogleSignIn.kt).
+ *
+ * v3.2: Like and Comment are GATED behind Google sign-in — tapping
+ * either while signed out opens the account dialog first, and the
+ * action runs exactly once after a successful sign-in (see
+ * requireGoogleSignIn). Reading stays anonymous and open to everyone.
  */
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -116,6 +121,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** True when the current Firebase user is a linked Google account. */
     var isGoogleSignedIn by mutableStateOf(false)
         private set
+    /**
+     * Last interactive Google sign-in failure, formatted "Code: message"
+     * (v3.2) — the account dialog shows it verbatim instead of a
+     * generic message. Null = no error to show (including user-cancel,
+     * which is not an error).
+     */
+    var googleSignInErrorDetail by mutableStateOf<String?>(null)
+        private set
+    /**
+     * True while the account (sign-in) dialog must be shown because a
+     * gated Like/Comment opened it (v3.2). Only ever true while a
+     * pending action is stored below.
+     */
+    var signInDialogVisible by mutableStateOf(false)
+        private set
+    /**
+     * One-shot resume for the Like/Comment that opened the sign-in
+     * dialog. Runs exactly once after a successful sign-in; dropped
+     * when the dialog is dismissed without signing in. Main thread only.
+     */
+    private var pendingSignInAction: (() -> Unit)? = null
 
     /**
      * Optimistic like-count deltas per slug (+1 when the user just
@@ -348,7 +374,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         profilePrefs.edit().putString("name", clean).apply()
     }
 
-    // ---- Social: Google Sign-In (v3.1) ----
+    // ---- Social: Google Sign-In (v3.1) + gate (v3.2) ----
 
     /** Re-reads the Firebase user: Google name/state after any sign-in/out. */
     fun refreshGoogleState() {
@@ -358,21 +384,82 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (google != null) maybePrefillNameFromGoogle(google.second)
     }
 
+    /** Clears the last sign-in error (dialog dismissed / new attempt). */
+    fun clearGoogleSignInError() {
+        googleSignInErrorDetail = null
+    }
+
+    /**
+     * Gate for Like / Comment (v3.2): those actions run ONLY for a
+     * Google-signed-in user. When signed in, runs [action] immediately;
+     * otherwise stores it and opens the sign-in dialog — the action runs
+     * exactly once after a successful sign-in (see
+     * consumePendingSignInAction) and is dropped if the user dismisses
+     * the dialog (see dismissSignInDialog). Must be called on the Main
+     * thread (it mutates State).
+     */
+    fun requireGoogleSignIn(action: () -> Unit) {
+        if (isGoogleSignedIn) {
+            action()
+            return
+        }
+        pendingSignInAction = action
+        signInDialogVisible = true
+    }
+
+    /**
+     * Runs the stored gated action exactly once, after a successful
+     * sign-in. Must run on the Main thread.
+     */
+    fun consumePendingSignInAction() {
+        val action = pendingSignInAction
+        pendingSignInAction = null
+        signInDialogVisible = false
+        action?.invoke()
+    }
+
+    /**
+     * Drops the stored gated action (dialog dismissed without signing
+     * in) — nothing was registered. Must run on the Main thread.
+     */
+    fun dismissSignInDialog() {
+        pendingSignInAction = null
+        signInDialogVisible = false
+    }
+
     /**
      * One-tap Google sign-in (called from the account dialog). Links the
      * Google account to the current anonymous user, so the uid — and all
      * likes/comments — survive. onResult(true) = signed in.
+     * v3.2: a real failure sets googleSignInErrorDetail (shown verbatim
+     * in the dialog); a user-cancel sets nothing — it is not an error.
      */
     fun requestGoogleSignIn(activity: Activity, onResult: (Boolean) -> Unit) {
+        googleSignInErrorDetail = null
         viewModelScope.launch(Dispatchers.IO) {
-            val result = signInWithGoogle(activity)
+            val outcome = signInWithGoogle(activity)
             withContext(Dispatchers.Main) {
-                if (result != null) {
-                    uid = result.uid
-                    refreshGoogleState()
-                    attachLikedListener()
+                when (outcome) {
+                    is GoogleSignInOutcome.Success -> {
+                        uid = outcome.result.uid
+                        refreshGoogleState()
+                        attachLikedListener()
+                        onResult(true)
+                    }
+                    GoogleSignInOutcome.Cancelled -> {
+                        // The user backed out of the Google picker —
+                        // not an error: no message, the dialog stays open.
+                        onResult(false)
+                    }
+                    is GoogleSignInOutcome.Failed -> {
+                        // The real error, verbatim (capped so a long
+                        // exception message cannot blow up the dialog).
+                        val detail = outcome.code +
+                            (outcome.detail?.let { ": $it" } ?: "")
+                        googleSignInErrorDetail = detail.take(300)
+                        onResult(false)
+                    }
                 }
-                onResult(result != null)
             }
         }
     }

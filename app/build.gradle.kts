@@ -37,8 +37,8 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 11
-            versionName = "1.5.0"
+            versionCode = 12
+            versionName = "1.5.1"
             // Native content feed (JSON) — the app reads articles straight
             // from GitHub Pages; no website/WebView involved.
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
@@ -51,8 +51,8 @@ android {
         create("en") {
             dimension = "language"
             applicationId = "net.libyapulse.app"
-            versionCode = 9
-            versionName = "1.4.0"
+            versionCode = 10
+            versionName = "1.4.1"
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/techpulse/\"")
             buildConfigField("boolean", "IS_ARABIC", "false")
             buildConfigField("String", "FACEBOOK_PAGE_URL", "\"https://www.facebook.com/profile.php?id=61596701491859\"")

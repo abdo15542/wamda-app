@@ -40,7 +40,8 @@
     <string name="account_sign_in">Sign in with Google</string>
     <string name="account_sign_in_hint">One tap with your Google account, then sign-in is automatic every time — your current likes and comments stay as they are.</string>
     <string name="account_signing_in">Signing in…</string>
-    <string name="account_signin_error">Could not sign in — check your connection and try again</string>
+    <string name="account_signin_required">Sign in with Google first — what you just tapped will go through right after.</string>
+    <string name="account_signin_error_detail">Could not sign in — %1$s</string>
     <string name="account_signed_in_as">Signed in as: %1$s</string>
     <string name="account_sign_out">Sign out</string>
 </resources>

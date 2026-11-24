@@ -177,10 +177,20 @@ fun WamdaApp(viewModel: AppViewModel) {
                         )
                     }
                 }
-                if (showAccountDialog) {
+                // One dialog for both triggers: the header account icon
+                // AND a gated Like/Comment (v3.2 — signInDialogVisible).
+                // On success the pending action runs exactly once, then
+                // the dialog closes; on dismiss the pending action is
+                // dropped and nothing was registered.
+                if (showAccountDialog || viewModel.signInDialogVisible) {
                     AccountDialog(
                         viewModel = viewModel,
-                        onDismiss = { showAccountDialog = false }
+                        onDismiss = {
+                            showAccountDialog = false
+                            viewModel.dismissSignInDialog()
+                            viewModel.clearGoogleSignInError()
+                        },
+                        onSignedIn = { viewModel.consumePendingSignInAction() }
                     )
                 }
                 Box(modifier = Modifier.weight(1f)) {
@@ -201,13 +211,26 @@ fun WamdaApp(viewModel: AppViewModel) {
  * the device links the Google account to the anonymous user, so likes
  * and comments survive. When signed in it shows the Google name and a
  * sign-out option instead.
+ *
+ * v3.2: (a) the dialog is also the gate for Like/Comment — when it was
+ * opened by a gated action it says so, and [onSignedIn] runs the
+ * pending action exactly once after a successful sign-in; (b) a real
+ * sign-in failure shows its actual error (code + message, from the
+ * ViewModel) instead of a generic message — a user-cancel shows no
+ * error at all, and the dialog stays open so the user can retry or
+ * close it.
  */
 @Composable
-private fun AccountDialog(viewModel: AppViewModel, onDismiss: () -> Unit) {
+private fun AccountDialog(
+    viewModel: AppViewModel,
+    onDismiss: () -> Unit,
+    onSignedIn: () -> Unit = {}
+) {
     val context = LocalContext.current
     val activity = context as? Activity
     var signingIn by remember { mutableStateOf(false) }
-    var signInFailed by remember { mutableStateOf(false) }
+    // Real failure detail from the ViewModel (v3.2); null = no error.
+    val errorDetail = viewModel.googleSignInErrorDetail
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.account_title)) },
@@ -222,14 +245,23 @@ private fun AccountDialog(viewModel: AppViewModel, onDismiss: () -> Unit) {
                         fontSize = 14.sp
                     )
                 } else {
+                    // Gated open (v3.2): say why sign-in is being asked.
+                    if (viewModel.signInDialogVisible) {
+                        Text(
+                            text = stringResource(R.string.account_signin_required),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
                     Text(
                         text = stringResource(R.string.account_sign_in_hint),
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    if (signInFailed) {
+                    if (errorDetail != null) {
                         Text(
-                            text = stringResource(R.string.account_signin_error),
+                            text = stringResource(R.string.account_signin_error_detail, errorDetail),
                             color = Color(0xFFFF8A80),
                             fontSize = 13.sp
                         )
@@ -250,10 +282,17 @@ private fun AccountDialog(viewModel: AppViewModel, onDismiss: () -> Unit) {
                         val act = activity ?: return@Button
                         if (signingIn) return@Button
                         signingIn = true
-                        signInFailed = false
                         viewModel.requestGoogleSignIn(act) { ok ->
                             signingIn = false
-                            if (ok) onDismiss() else signInFailed = true
+                            if (ok) {
+                                // Signed in: run the pending Like/Comment
+                                // (if any) exactly once, then close.
+                                onSignedIn()
+                                onDismiss()
+                            }
+                            // Failure: the dialog stays open and shows
+                            // the real error from the ViewModel; cancel:
+                            // no error shown, retry or close.
                         }
                     },
                     enabled = !signingIn && activity != null,
@@ -582,7 +621,11 @@ private fun NewsFeed(viewModel: AppViewModel) {
                                     viewModel.listCounts[article.slug] ?: ArticleSocial()
                                 ),
                                 liked = viewModel.isLiked(article.slug),
-                                onLike = { viewModel.toggleLike(article.slug) },
+                                // v3.2: liking needs Google sign-in first —
+                                // while signed out the tap opens the
+                                // sign-in dialog, and the like registers
+                                // exactly once after a successful sign-in.
+                                onLike = { viewModel.requireGoogleSignIn { viewModel.toggleLike(article.slug) } },
                                 onClick = { viewModel.openArticle(article.slug) }
                             )
                         }
@@ -833,14 +876,40 @@ private fun SocialSection(viewModel: AppViewModel, detail: ArticleDetail) {
     var showNameDialog by remember { mutableStateOf(false) }
     var pendingText by remember { mutableStateOf<String?>(null) }
 
+    /**
+     * Sends the draft comment (v3.2: gated behind Google sign-in).
+     * While signed out, the tap stores this whole send as the pending
+     * action and opens the sign-in dialog — after a successful sign-in
+     * the send runs exactly once (including the first-time name dialog
+     * when no display name exists yet); dismissing the dialog drops it
+     * and nothing is posted. The draft is only cleared on a successful
+     * post, so the text is never lost on cancel/failure.
+     */
+    fun sendComment() {
+        val text = draft.trim()
+        if (text.isEmpty() || viewModel.commentPosting) return
+        viewModel.requireGoogleSignIn {
+            if (viewModel.displayName == null) {
+                // First comment: ask for a display name, then post.
+                pendingText = text
+                showNameDialog = true
+            } else {
+                viewModel.postComment(detail.slug, text) { ok ->
+                    if (ok) draft = ""
+                }
+            }
+        }
+    }
+
     Column(modifier = Modifier.padding(top = 12.dp)) {
         // Like row: heart + shared count, Facebook-style.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
+            // v3.2: liking needs Google sign-in first — see the list row.
             Button(
-                onClick = { viewModel.toggleLike(detail.slug) },
+                onClick = { viewModel.requireGoogleSignIn { viewModel.toggleLike(detail.slug) } },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (liked) brandAccent else brandDarkLight,
                     contentColor = if (liked) Color.Black else Color.White
@@ -945,19 +1014,7 @@ private fun SocialSection(viewModel: AppViewModel, detail: ArticleDetail) {
                 )
             }
             Button(
-                onClick = {
-                    val text = draft.trim()
-                    if (text.isEmpty() || viewModel.commentPosting) return@Button
-                    if (viewModel.displayName == null) {
-                        // First comment: ask for a display name, then post.
-                        pendingText = text
-                        showNameDialog = true
-                    } else {
-                        viewModel.postComment(detail.slug, text) { ok ->
-                            if (ok) draft = ""
-                        }
-                    }
-                },
+                onClick = { sendComment() },
                 enabled = !viewModel.commentPosting,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = brandAccent,

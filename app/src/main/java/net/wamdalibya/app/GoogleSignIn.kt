@@ -2,13 +2,16 @@ package net.wamdalibya.app
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.tasks.await
 
@@ -34,9 +37,31 @@ import kotlinx.coroutines.tasks.await
  * Every function here is failure-safe: user-cancel, no Google account
  * on the device, no network, or a missing client id all return null /
  * do nothing — never throw, never crash, never show a stack trace.
+ *
+ * v3.2: the interactive sign-in NEVER swallows its failure into a
+ * generic message any more. signInWithGoogle returns a
+ * GoogleSignInOutcome: Success, Cancelled (the user dismissed the
+ * Google picker themselves — not an error, nothing shown), or Failed
+ * carrying the REAL exception (class name + Firebase errorCode when
+ * present + message), which the account dialog shows verbatim and
+ * which is also logged in full to Logcat.
  */
 data class GoogleSignInResult(val uid: String, val displayName: String?)
 
+/** Outcome of an interactive Google sign-in attempt (v3.2). */
+sealed class GoogleSignInOutcome {
+    data class Success(val result: GoogleSignInResult) : GoogleSignInOutcome()
+    /** The user dismissed the Google picker themselves — not an error. */
+    object Cancelled : GoogleSignInOutcome()
+    /**
+     * A real failure. code = the exception's class (Firebase errors
+     * also carry their errorCode, e.g. "FirebaseAuthException
+     * (ERROR_INVALID_CREDENTIAL)"); detail = the exception message.
+     */
+    data class Failed(val code: String, val detail: String?) : GoogleSignInOutcome()
+}
+
+private const val TAG = "GoogleSignIn"
 private const val AUTH_PREFS = "wamda_auth"
 private const val KEY_GOOGLE_LINKED = "google_linked"
 
@@ -51,10 +76,12 @@ private fun setGoogleLinked(context: Context, linked: Boolean) {
 }
 
 /**
- * Interactive one-tap sign-in. Shows the Google account picker once;
- * returns the uid + Google display name, or null on cancel / failure.
+ * Interactive one-tap sign-in. Shows the Google account picker once.
+ * Returns Success (uid + Google display name), Cancelled (the user
+ * dismissed the picker — not an error), or Failed with the REAL
+ * exception (code + message), logged in full to Logcat. Never throws.
  */
-suspend fun signInWithGoogle(activity: Activity): GoogleSignInResult? {
+suspend fun signInWithGoogle(activity: Activity): GoogleSignInOutcome {
     return try {
         val option = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
@@ -65,12 +92,36 @@ suspend fun signInWithGoogle(activity: Activity): GoogleSignInResult? {
             .build()
         val response = CredentialManager.create(activity)
             .getCredential(context = activity, request = request)
-        linkGoogleCredential(activity, response)
+        val linked = linkGoogleCredential(activity, response)
+        if (linked != null) {
+            GoogleSignInOutcome.Success(linked)
+        } else {
+            // A credential came back but it was not a Google ID token —
+            // a real failure, not a cancel; say so plainly.
+            Log.e(TAG, "Google sign-in failed: credential was not a Google ID token")
+            GoogleSignInOutcome.Failed("NoGoogleIdToken", null)
+        }
+    } catch (e: GetCredentialCancellationException) {
+        // The user backed out of the Google picker (e.g. dismissed the
+        // "unverified app" warning) — their choice, not an error:
+        // nothing is shown, the dialog just stays open.
+        GoogleSignInOutcome.Cancelled
     } catch (e: Exception) {
-        // Cancelled, no Google account, no network, or the web client id
-        // is missing — stay anonymous, no error shown.
-        null
+        // The real error, in full, to Logcat — and carried back so the
+        // dialog can show it instead of a generic "check connection".
+        Log.e(TAG, "Google sign-in failed", e)
+        GoogleSignInOutcome.Failed(failureCode(e), e.message)
     }
+}
+
+/**
+ * Short code for a sign-in failure: the exception class; Firebase
+ * auth errors also carry their errorCode (e.g. ERROR_INVALID_CREDENTIAL,
+ * ERROR_ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL).
+ */
+private fun failureCode(e: Exception): String {
+    val base = e::class.java.simpleName
+    return if (e is FirebaseAuthException) "$base (${e.errorCode})" else base
 }
 
 /**
@@ -98,6 +149,10 @@ suspend fun trySilentGoogleLink(activity: Activity): GoogleSignInResult? {
             .getCredential(context = activity, request = request)
         linkGoogleCredential(activity, response)
     } catch (e: Exception) {
+        // Silent path: still log it — a failing silent re-link is the
+        // first thing to check when sign-in "stops working" — but never
+        // show anything: the caller stays anonymous and never prompts.
+        Log.w(TAG, "Silent Google re-link failed", e)
         null
     }
 }
