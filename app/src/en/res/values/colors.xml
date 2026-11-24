@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TechPulse palette (EN flavor only). These shadow the AR navy/gold:
+     splash_bg + brand_accent override the shared aliases in main, and
+     techpulse_* feed the EN launcher icon and theme. -->
+<resources>
+    <color name="techpulse_teal">#0B2B33</color>
+    <color name="techpulse_teal_dark">#062A33</color>
+    <color name="techpulse_cyan">#00D4FF</color>
+    <color name="splash_bg">#0B2B33</color>
+    <color name="brand_accent">#00D4FF</color>
+</resources>

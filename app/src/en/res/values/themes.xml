@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- EN flavor theme: same style name as main (Theme.Wamda) so the
+     manifest keeps working, but with the TechPulse teal/cyan palette.
+     The style name is internal only — users see "TechPulse". -->
+<resources>
+    <style name="Theme.Wamda" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/techpulse_teal</item>
+        <item name="colorPrimaryDark">@color/techpulse_teal_dark</item>
+        <item name="colorAccent">@color/techpulse_cyan</item>
+        <item name="android:windowBackground">@color/techpulse_teal</item>
+    </style>
+</resources>

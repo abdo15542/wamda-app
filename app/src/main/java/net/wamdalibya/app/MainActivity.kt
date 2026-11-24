@@ -22,12 +22,14 @@ import com.google.android.gms.ads.MobileAds
 /**
  * One site per app — the site comes from the build flavor (BuildConfig.SITE_URL):
  * - ar flavor: Wamda Libya (Arabic) — https://abdo15542.github.io/wamdalibya/
- * - en flavor: Wamda (English) — https://abdo15542.github.io/libyapulse/
+ * - en flavor: TechPulse (English) — https://abdo15542.github.io/techpulse/
  * Each flavor is its own installable app (own package, own name, own icon
  * label). New articles appear automatically — the app always loads the
  * live site.
- * The "WamdaApp/1.0" user-agent suffix lets the sites hide AdSense ads
- * inside the app (AdSense is for the web; apps must not show it).
+ * The "<token>/1.0 vc<N>" user-agent suffix (WamdaApp for the AR flavor,
+ * TechPulseApp for the EN flavor) lets the sites hide AdSense ads
+ * inside the app (AdSense is for the web; apps must not show it) and offer
+ * app updates — N is this flavor's versionCode (BuildConfig.VERSION_CODE).
  * The Netlify "Powered by" badge is hidden inside the app with injected
  * CSS/JS (it still shows on the website in a browser — that is Netlify's
  * free-tier mark and can only be removed from the site itself by moving
@@ -78,7 +80,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<FrameLayout>(R.id.ad_container).addView(adView)
         adView.loadAd(AdRequest.Builder().build())
 
-        swipeRefresh.setColorSchemeColors(getColor(R.color.gold))
+        swipeRefresh.setColorSchemeColors(getColor(R.color.brand_accent))
 
         val settings: WebSettings = webView.settings
         settings.javaScriptEnabled = true
@@ -87,8 +89,13 @@ class MainActivity : AppCompatActivity() {
         settings.setSupportZoom(true)
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
-        // Lets the sites hide AdSense ads inside the app.
-        settings.userAgentString = settings.userAgentString + " WamdaApp/1.0"
+        // Lets the sites hide AdSense ads inside the app, and lets them
+        // offer app updates: the "vc<N>" token carries this flavor's
+        // versionCode, so the site can tell an old install a newer
+        // build is available (see assets/site.js on both sites).
+        // The token name is per-flavor (BuildConfig.UA_TOKEN): WamdaApp
+        // for AR, TechPulseApp for EN.
+        settings.userAgentString = settings.userAgentString + " " + BuildConfig.UA_TOKEN + "/1.0 vc" + BuildConfig.VERSION_CODE
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {

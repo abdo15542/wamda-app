@@ -26,9 +26,10 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 6
-            versionName = "1.1.4"
+            versionCode = 7
+            versionName = "1.1.5"
             buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
+            buildConfigField("String", "UA_TOKEN", "\"WamdaApp\"")
             // Real AdMob IDs (Abdoo's account, pub-6317687886565811).
             manifestPlaceholders["admobAppId"] = "ca-app-pub-6317687886565811~6841921039"
             buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-6317687886565811/7459586873\"")
@@ -36,9 +37,10 @@ android {
         create("en") {
             dimension = "language"
             applicationId = "net.libyapulse.app"
-            versionCode = 4
-            versionName = "1.0.3"
-            buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/libyapulse/\"")
+            versionCode = 5
+            versionName = "1.0.4"
+            buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/techpulse/\"")
+            buildConfigField("String", "UA_TOKEN", "\"TechPulseApp\"")
             // Real AdMob IDs (Abdoo's account, pub-6317687886565811).
             manifestPlaceholders["admobAppId"] = "ca-app-pub-6317687886565811~4758683178"
             buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-6317687886565811/3445601506\"")

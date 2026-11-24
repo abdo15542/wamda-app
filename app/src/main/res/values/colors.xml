@@ -3,4 +3,8 @@
     <color name="navy">#0B1E3A</color>
     <color name="navy_dark">#071426</color>
     <color name="gold">#D4A017</color>
+    <!-- Flavor-neutral aliases: AR keeps navy/gold; the EN flavor
+         overrides splash_bg/brand_accent with the TechPulse palette. -->
+    <color name="splash_bg">#0B1E3A</color>
+    <color name="brand_accent">#D4A017</color>
 </resources>
