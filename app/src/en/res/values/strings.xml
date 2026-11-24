@@ -5,4 +5,16 @@
     <string name="offline_title">No internet connection</string>
     <string name="offline_text">Check your connection and try again.</string>
     <string name="retry">Try again</string>
+    <string name="search_hint">Search titles…</string>
+    <string name="tab_news">News</string>
+    <string name="tab_announcements">Announcements</string>
+    <string name="all_categories">All</string>
+    <string name="no_results">No matching results</string>
+    <string name="offline_notice">You are offline — showing saved articles</string>
+    <string name="update_title">A new update is available</string>
+    <string name="update_text">Version %1$s is now available</string>
+    <string name="update_button">Download update</string>
+    <string name="back_label">Back</string>
+    <string name="article_error">Could not load the article</string>
+    <string name="announcements_empty">No announcements yet</string>
 </resources>
