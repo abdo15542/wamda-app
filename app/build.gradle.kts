@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // Firebase (google-services.json per flavor: app/src/ar/ + app/src/en/).
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -35,8 +37,8 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 9
-            versionName = "1.3.0"
+            versionCode = 10
+            versionName = "1.4.0"
             // Native content feed (JSON) — the app reads articles straight
             // from GitHub Pages; no website/WebView involved.
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
@@ -49,8 +51,8 @@ android {
         create("en") {
             dimension = "language"
             applicationId = "net.libyapulse.app"
-            versionCode = 7
-            versionName = "1.2.0"
+            versionCode = 8
+            versionName = "1.3.0"
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/techpulse/\"")
             buildConfigField("boolean", "IS_ARABIC", "false")
             buildConfigField("String", "FACEBOOK_PAGE_URL", "\"https://www.facebook.com/profile.php?id=61596701491859\"")
@@ -131,4 +133,16 @@ dependencies {
     // and a newer compileSdk; 23.6.0 builds with this toolchain. Do not bump
     // without also upgrading Kotlin and compileSdk.
     implementation("com.google.android.gms:play-services-ads:23.6.0")
+
+    // Firebase — shared likes (with count) + in-app comments.
+    // BoM 32.8.1 is the Kotlin 1.9.x-era release (firestore 24.11.x,
+    // auth 22.3.x); 33.x is Kotlin 2.0-era — do not bump without also
+    // upgrading Kotlin. google-services.json lives per flavor:
+    // app/src/ar/google-services.json and app/src/en/google-services.json.
+    val firebaseBom = platform("com.google.firebase:firebase-bom:32.8.1")
+    implementation(firebaseBom)
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-auth-ktx")
+    // Task.await() for Firebase calls (pairs with Kotlin 1.9.22).
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 }

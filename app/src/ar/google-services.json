@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "714171088305",
+    "project_id": "wamda-b9079",
+    "storage_bucket": "wamda-b9079.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:714171088305:android:958dcacc5f277814eb9190",
+        "android_client_info": {
+          "package_name": "net.wamdalibya.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4G4bj09QIRBzptiQ47rCbQhLsG7Zu_9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

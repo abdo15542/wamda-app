@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,7 +37,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -74,6 +74,9 @@ import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // Brand palette, per flavor. AR: navy + gold. EN (TechPulse): deep teal + cyan.
 private val brandDark = if (BuildConfig.IS_ARABIC) Color(0xFF0B1E3A) else Color(0xFF0B2B33)
@@ -328,6 +331,11 @@ private fun NewsFeed(viewModel: AppViewModel) {
     // Pagination: only the first 40 are composed; 40 more load when the
     // user scrolls near the end.
     val shown = filtered.take(viewModel.visibleCount)
+    // Shared like/comment counts for the visible page (one batched read
+    // per page; missing articles simply show 0).
+    LaunchedEffect(shown) {
+        viewModel.fetchCountsFor(shown.map { it.slug })
+    }
     val listState = rememberLazyListState()
     LaunchedEffect(debouncedQuery, selectedCategory) {
         viewModel.resetPaging()
@@ -460,7 +468,13 @@ private fun NewsFeed(viewModel: AppViewModel) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(shown, key = { it.slug }) { article ->
-                            ArticleRow(article) { viewModel.openArticle(article.slug) }
+                            ArticleRow(
+                                article = article,
+                                social = viewModel.listCounts[article.slug],
+                                liked = viewModel.isLiked(article.slug),
+                                onLike = { viewModel.toggleLike(article.slug) },
+                                onClick = { viewModel.openArticle(article.slug) }
+                            )
                         }
                     }
                 }
@@ -477,7 +491,13 @@ private fun NewsFeed(viewModel: AppViewModel) {
 }
 
 @Composable
-private fun ArticleRow(article: FeedArticle, onClick: () -> Unit) {
+private fun ArticleRow(
+    article: FeedArticle,
+    social: ArticleSocial?,
+    liked: Boolean,
+    onLike: () -> Unit,
+    onClick: () -> Unit
+) {
     val context = LocalContext.current
     Card(
         modifier = Modifier
@@ -524,8 +544,59 @@ private fun ArticleRow(article: FeedArticle, onClick: () -> Unit) {
                         fontSize = 13.sp
                     )
                 }
+                // Shared social counts, Facebook-style: tapping the heart
+                // likes WITHOUT opening the article (inner clickable wins
+                // over the card's click); the comment count opens it.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable(onClick = onLike)
+                            .padding(vertical = 4.dp, horizontal = 2.dp)
+                    ) {
+                        Text(
+                            text = "♥",
+                            color = if (liked) brandAccent else Color(0xFFB0BEC5),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = (social?.likes ?: 0L).toString(),
+                            color = Color(0xFFB0BEC5),
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "💬",
+                            color = Color(0xFFB0BEC5),
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = (social?.comments ?: 0L).toString(),
+                            color = Color(0xFFB0BEC5),
+                            fontSize = 13.sp
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+/** Short "2 Jan 14:30"-style stamp for a comment, or "" while pending. */
+private fun commentTime(millis: Long): String {
+    if (millis == Long.MAX_VALUE) return ""
+    return try {
+        SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(millis))
+    } catch (e: Exception) {
+        ""
     }
 }
 
@@ -621,54 +692,278 @@ private fun ArticleContent(viewModel: AppViewModel, slug: String) {
                                 modifier = Modifier.padding(bottom = 14.dp)
                             )
                         }
-                        // Like + comment: the like is per-device (no
-                        // backend exists); the comment opens the
-                        // article's Facebook post, where the owner reads
-                        // what people say. Without a post yet, the page.
+                        // Shared like + in-app comments (v3). The like
+                        // COUNT comes from the server for everyone; the
+                        // comments live under the article INSIDE the app —
+                        // nothing here opens Facebook any more.
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(1.dp)
                                 .background(Color(0xFF334155))
                         )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            val liked = viewModel.isLiked(detail.slug)
-                            Button(
-                                onClick = { viewModel.toggleLike(detail.slug) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (liked) brandAccent else brandDarkLight,
-                                    contentColor = if (liked) Color.Black else Color.White
-                                )
-                            ) {
-                                Text(
-                                    if (liked) stringResource(R.string.liked_button)
-                                    else stringResource(R.string.like_button)
-                                )
-                            }
-                            OutlinedButton(
-                                onClick = {
-                                    openUrl(
-                                        context,
-                                        detail.fbUrl.ifBlank { BuildConfig.FACEBOOK_PAGE_URL }
-                                    )
-                                },
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = brandAccent
-                                )
-                            ) {
-                                Text(stringResource(R.string.comment_button))
-                            }
-                        }
+                        SocialSection(viewModel, detail)
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Like bar (heart + shared count) and the in-app comments section.
+ * Everything happens inside the app: no Facebook redirect anywhere.
+ */
+@Composable
+private fun SocialSection(viewModel: AppViewModel, detail: ArticleDetail) {
+    val social = viewModel.detailSocial
+    val liked = viewModel.detailLiked
+    var draft by remember(detail.slug) { mutableStateOf("") }
+    var showNameDialog by remember { mutableStateOf(false) }
+    var pendingText by remember { mutableStateOf<String?>(null) }
+
+    Column(modifier = Modifier.padding(top = 12.dp)) {
+        // Like row: heart + shared count, Facebook-style.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Button(
+                onClick = { viewModel.toggleLike(detail.slug) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (liked) brandAccent else brandDarkLight,
+                    contentColor = if (liked) Color.Black else Color.White
+                )
+            ) {
+                Text(
+                    text = if (liked) stringResource(R.string.liked_button)
+                    else stringResource(R.string.like_button)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = social.likes.toString(),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = "💬 ${social.comments}",
+                color = Color(0xFFB0BEC5),
+                fontSize = 15.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.comments_title, social.comments),
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        when {
+            viewModel.commentsLoading -> {
+                CircularProgressIndicator(
+                    color = brandAccent,
+                    modifier = Modifier
+                        .padding(vertical = 12.dp)
+                        .size(24.dp)
+                )
+            }
+            viewModel.comments.isEmpty() -> {
+                Text(
+                    text = stringResource(R.string.comments_empty),
+                    color = Color(0xFFB0BEC5),
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+            else -> {
+                for (c in viewModel.comments) {
+                    CommentItem(c)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        // Composer: name row + text field + send.
+        val name = viewModel.displayName
+        if (name != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.comment_as_name, name),
+                    color = Color(0xFFB0BEC5),
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = { showNameDialog = true },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.comment_change_name),
+                        color = brandAccent,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { if (it.length <= 500) draft = it },
+            placeholder = { Text(stringResource(R.string.comment_hint)) },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 2,
+            maxLines = 4
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (viewModel.commentError) {
+                Text(
+                    text = stringResource(R.string.comment_error),
+                    color = Color(0xFFFF8A80),
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                )
+            }
+            Button(
+                onClick = {
+                    val text = draft.trim()
+                    if (text.isEmpty() || viewModel.commentPosting) return@Button
+                    if (viewModel.displayName == null) {
+                        // First comment: ask for a display name, then post.
+                        pendingText = text
+                        showNameDialog = true
+                    } else {
+                        viewModel.postComment(detail.slug, text) { ok ->
+                            if (ok) draft = ""
+                        }
+                    }
+                },
+                enabled = !viewModel.commentPosting,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = brandAccent,
+                    contentColor = Color.Black
+                )
+            ) {
+                Text(
+                    if (viewModel.commentPosting) stringResource(R.string.comment_posting)
+                    else stringResource(R.string.comment_send)
+                )
+            }
+        }
+    }
+
+    if (showNameDialog) {
+        NameDialog(
+            currentName = viewModel.displayName,
+            onDismiss = {
+                showNameDialog = false
+                pendingText = null
+            },
+            onSave = { newName ->
+                viewModel.saveDisplayName(newName)
+                showNameDialog = false
+                val text = pendingText
+                pendingText = null
+                if (text != null) {
+                    viewModel.postComment(detail.slug, text) { ok ->
+                        if (ok) draft = ""
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CommentItem(comment: AppComment) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = comment.name.ifBlank { "?" },
+                color = brandAccent,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            val stamp = commentTime(comment.createdAtMillis)
+            if (stamp.isNotBlank()) {
+                Text(
+                    text = stamp,
+                    color = Color(0xFF78909C),
+                    fontSize = 12.sp
+                )
+            }
+        }
+        Text(
+            text = comment.text,
+            color = Color.White,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .height(1.dp)
+                .background(Color(0xFF1E3A56))
+        )
+    }
+}
+
+/** Asks once for the display name shown with the user's comments. */
+@Composable
+private fun NameDialog(
+    currentName: String?,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    val defaultName = stringResource(R.string.comment_default_name)
+    var name by remember { mutableStateOf(currentName ?: defaultName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.comment_name_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.comment_name_hint),
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { if (it.length <= 30) name = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.trim().isNotEmpty()) onSave(name) },
+                enabled = name.trim().isNotEmpty()
+            ) {
+                Text(stringResource(R.string.comment_name_save), color = brandAccent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.comment_name_cancel))
+            }
+        }
+    )
 }
 
 /**
