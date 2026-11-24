@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Libya Pulse</string>
+    <string name="app_name">Wamda</string>
     <string name="app_tagline">Tech news, as it breaks</string>
     <string name="offline_title">No internet connection</string>
     <string name="offline_text">Check your connection and try again.</string>

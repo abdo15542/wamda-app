@@ -26,8 +26,8 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 5
-            versionName = "1.1.3"
+            versionCode = 6
+            versionName = "1.1.4"
             buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
             // Real AdMob IDs (Abdoo's account, pub-6317687886565811).
             manifestPlaceholders["admobAppId"] = "ca-app-pub-6317687886565811~6841921039"
@@ -36,8 +36,8 @@ android {
         create("en") {
             dimension = "language"
             applicationId = "net.libyapulse.app"
-            versionCode = 3
-            versionName = "1.0.2"
+            versionCode = 4
+            versionName = "1.0.3"
             buildConfigField("String", "SITE_URL", "\"https://abdo15542.github.io/libyapulse/\"")
             // Real AdMob IDs (Abdoo's account, pub-6317687886565811).
             manifestPlaceholders["admobAppId"] = "ca-app-pub-6317687886565811~4758683178"

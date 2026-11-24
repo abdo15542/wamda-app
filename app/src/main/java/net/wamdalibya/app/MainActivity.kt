@@ -22,7 +22,7 @@ import com.google.android.gms.ads.MobileAds
 /**
  * One site per app — the site comes from the build flavor (BuildConfig.SITE_URL):
  * - ar flavor: Wamda Libya (Arabic) — https://abdo15542.github.io/wamdalibya/
- * - en flavor: Libya Pulse (English) — https://abdo15542.github.io/libyapulse/
+ * - en flavor: Wamda (English) — https://abdo15542.github.io/libyapulse/
  * Each flavor is its own installable app (own package, own name, own icon
  * label). New articles appear automatically — the app always loads the
  * live site.

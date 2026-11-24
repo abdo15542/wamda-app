@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ومضة ليبية</string>
+    <string name="app_name">ومضة</string>
     <string name="app_tagline">أخبار التقنية أولاً بأول</string>
     <string name="offline_title">لا يوجد اتصال بالإنترنت</string>
     <string name="offline_text">تحقق من اتصالك ثم حاول مرة أخرى.</string>
