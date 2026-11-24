@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
@@ -35,19 +36,20 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,9 +67,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 
 // Brand palette, per flavor. AR: navy + gold. EN (TechPulse): deep teal + cyan.
 private val brandDark = if (BuildConfig.IS_ARABIC) Color(0xFF0B1E3A) else Color(0xFF0B2B33)
@@ -82,6 +88,22 @@ private fun openUrl(context: Context, url: String) {
         // A bad link must never crash the app.
     }
 }
+
+/**
+ * Article images are 1200x800 JPEGs on the server. Decoding them at full
+ * resolution in every list card was the main cause of the slow, jerky
+ * scrolling. Every image now loads through an explicit downsampling
+ * request (list ~800px, detail ~1080px) with memory + disk caching and
+ * no crossfade, so scrolling stays smooth.
+ */
+private fun articleImageRequest(context: Context, url: String, sizePx: Int): ImageRequest =
+    ImageRequest.Builder(context)
+        .data(url)
+        .size(sizePx)
+        .memoryCachePolicy(CachePolicy.ENABLED)
+        .diskCachePolicy(CachePolicy.ENABLED)
+        .crossfade(false)
+        .build()
 
 @Composable
 fun WamdaApp(viewModel: AppViewModel) {
@@ -100,13 +122,14 @@ fun WamdaApp(viewModel: AppViewModel) {
             )
         ) {
             val screen = viewModel.screen
+            val context = LocalContext.current
             BackHandler(enabled = screen is Screen.Article) { viewModel.goHome() }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                // Header: brand name + tagline.
+                // Header: brand name + tagline + follow-on-Facebook button.
                 Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
                     Text(
                         text = stringResource(R.string.app_name),
@@ -119,6 +142,17 @@ fun WamdaApp(viewModel: AppViewModel) {
                         color = brandAccent,
                         fontSize = 14.sp
                     )
+                    TextButton(
+                        onClick = { openUrl(context, BuildConfig.FACEBOOK_PAGE_URL) },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.follow_facebook),
+                            color = brandAccent,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
                 Box(modifier = Modifier.weight(1f)) {
                     when (val s = screen) {
@@ -137,39 +171,38 @@ fun WamdaApp(viewModel: AppViewModel) {
 private fun HomeContent(viewModel: AppViewModel) {
     val ann = viewModel.announcements
     Column(modifier = Modifier.fillMaxSize()) {
-        // Update banner: shown only when the feed says a newer build exists.
+        // TOP ANNOUNCEMENTS AREA (above search):
+        // 1. an update card when a newer build exists, else
+        // 2. the newest announcement as one compact dismissible card.
+        // The in-app download promo is never shown inside the app.
         if (ann.latestVersionCode > BuildConfig.VERSION_CODE && ann.apkUrl.isNotBlank()) {
-            UpdateBanner(ann)
-        }
-        TabRow(
-            selectedTabIndex = if (viewModel.tab == Tab.NEWS) 0 else 1,
-            containerColor = brandDark,
-            contentColor = brandAccent
-        ) {
-            Tab(
-                selected = viewModel.tab == Tab.NEWS,
-                onClick = { viewModel.selectTab(Tab.NEWS) },
-                text = { Text(stringResource(R.string.tab_news)) }
-            )
-            Tab(
-                selected = viewModel.tab == Tab.ANNOUNCEMENTS,
-                onClick = { viewModel.selectTab(Tab.ANNOUNCEMENTS) },
-                text = { Text(stringResource(R.string.tab_announcements)) }
-            )
+            UpdateCard(ann)
+        } else {
+            val latest = remember(ann) {
+                ann.items.firstOrNull { it.buttonUrl != ann.apkUrl }
+            }
+            if (latest != null) {
+                LatestAnnouncementCard(latest)
+            }
         }
         Box(modifier = Modifier.weight(1f)) {
-            if (viewModel.tab == Tab.NEWS) NewsFeed(viewModel) else AnnouncementsList(viewModel)
+            NewsFeed(viewModel)
         }
     }
 }
 
+/**
+ * Update card: one tap downloads the APK inside the app (DownloadManager)
+ * and opens the Android installer automatically when it finishes.
+ */
 @Composable
-private fun UpdateBanner(ann: AnnouncementsData) {
+private fun UpdateCard(ann: AnnouncementsData) {
     val context = LocalContext.current
+    var downloading by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp),
         colors = CardDefaults.cardColors(containerColor = brandAccent)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -186,10 +219,89 @@ private fun UpdateBanner(ann: AnnouncementsData) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Button(
-                onClick = { openUrl(context, ann.apkUrl) },
+                onClick = {
+                    if (!downloading) {
+                        downloading = UpdateInstaller.startUpdate(context, ann.apkUrl)
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White)
             ) {
-                Text(stringResource(R.string.update_button))
+                Text(
+                    if (downloading) stringResource(R.string.update_downloading)
+                    else stringResource(R.string.update_button)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LatestAnnouncementCard(ann: Announcement) {
+    var dismissed by remember(ann.id) { mutableStateOf(false) }
+    if (dismissed) return
+    val context = LocalContext.current
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp),
+        colors = CardDefaults.cardColors(containerColor = brandDarkLight)
+    ) {
+        Column {
+            if (ann.image.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp)
+                        .background(Color.Black)
+                ) {
+                    AsyncImage(
+                        model = articleImageRequest(context, ann.image, 800),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = ann.title,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = { dismissed = true },
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.dismiss),
+                            color = brandAccent,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+                if (ann.text.isNotBlank()) {
+                    Text(
+                        text = ann.text,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+                if (ann.buttonUrl.isNotBlank() && ann.buttonText.isNotBlank()) {
+                    Button(
+                        onClick = { openUrl(context, ann.buttonUrl) },
+                        modifier = Modifier.padding(top = 10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = brandAccent,
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Text(ann.buttonText)
+                    }
+                }
             }
         }
     }
@@ -198,13 +310,38 @@ private fun UpdateBanner(ann: AnnouncementsData) {
 @Composable
 private fun NewsFeed(viewModel: AppViewModel) {
     var query by remember { mutableStateOf("") }
+    // Search is debounced ~300ms: typing no longer refilters 1201 items
+    // on every keystroke.
+    var debouncedQuery by remember { mutableStateOf("") }
+    LaunchedEffect(query) {
+        delay(300)
+        debouncedQuery = query
+    }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     val articles = viewModel.articles
-    val filtered = remember(articles, query, selectedCategory) {
+    val filtered = remember(articles, debouncedQuery, selectedCategory) {
         articles.filter { a ->
             (selectedCategory == null || a.category == selectedCategory) &&
-                (query.isBlank() || a.title.contains(query, ignoreCase = true))
+                (debouncedQuery.isBlank() || a.title.contains(debouncedQuery, ignoreCase = true))
         }
+    }
+    // Pagination: only the first 40 are composed; 40 more load when the
+    // user scrolls near the end.
+    val shown = filtered.take(viewModel.visibleCount)
+    val listState = rememberLazyListState()
+    LaunchedEffect(debouncedQuery, selectedCategory) {
+        viewModel.resetPaging()
+        listState.scrollToItem(0)
+    }
+    LaunchedEffect(listState, filtered.size) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+            .collect { last ->
+                if (last >= 0 && last >= viewModel.visibleCount - 5 &&
+                    viewModel.visibleCount < filtered.size
+                ) {
+                    viewModel.loadMore()
+                }
+            }
     }
     val pullRefreshState = rememberPullRefreshState(
         refreshing = viewModel.isLoading,
@@ -260,55 +397,71 @@ private fun NewsFeed(viewModel: AppViewModel) {
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
                 )
             }
-            if (articles.isEmpty() && !viewModel.isLoading) {
-                // Nothing cached and no network.
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.offline_title),
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = stringResource(R.string.offline_text),
-                        color = Color(0xFFB0BEC5),
-                        fontSize = 15.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                    Button(
-                        onClick = { viewModel.refresh() },
-                        modifier = Modifier.padding(top = 24.dp)
+            when {
+                articles.isEmpty() && viewModel.isLoading -> {
+                    // No cache at all yet: this is the only time a full
+                    // spinner shows. With a cache, the list is already
+                    // on screen and the refresh happens in the background.
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(stringResource(R.string.retry))
+                        CircularProgressIndicator(color = brandAccent)
                     }
                 }
-            } else if (filtered.isEmpty() && !viewModel.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.no_results),
-                        color = Color(0xFFB0BEC5),
-                        fontSize = 15.sp
-                    )
+                articles.isEmpty() -> {
+                    // Nothing cached and no network.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.offline_title),
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = stringResource(R.string.offline_text),
+                            color = Color(0xFFB0BEC5),
+                            fontSize = 15.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        Button(
+                            onClick = { viewModel.refresh() },
+                            modifier = Modifier.padding(top = 24.dp)
+                        ) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(filtered, key = { it.slug }) { article ->
-                        ArticleRow(article) { viewModel.openArticle(article.slug) }
+                filtered.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.no_results),
+                            color = Color(0xFFB0BEC5),
+                            fontSize = 15.sp
+                        )
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(shown, key = { it.slug }) { article ->
+                            ArticleRow(article) { viewModel.openArticle(article.slug) }
+                        }
                     }
                 }
             }
@@ -325,6 +478,7 @@ private fun NewsFeed(viewModel: AppViewModel) {
 
 @Composable
 private fun ArticleRow(article: FeedArticle, onClick: () -> Unit) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -340,7 +494,7 @@ private fun ArticleRow(article: FeedArticle, onClick: () -> Unit) {
                         .background(Color.Black)
                 ) {
                     AsyncImage(
-                        model = article.image,
+                        model = articleImageRequest(context, article.image, 800),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -378,6 +532,7 @@ private fun ArticleRow(article: FeedArticle, onClick: () -> Unit) {
 @Composable
 private fun ArticleContent(viewModel: AppViewModel, slug: String) {
     val detail = viewModel.articleDetail
+    val context = LocalContext.current
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.padding(start = 4.dp, top = 4.dp)) {
             TextButton(onClick = { viewModel.goHome() }) {
@@ -426,7 +581,7 @@ private fun ArticleContent(viewModel: AppViewModel, slug: String) {
                                 .background(Color.Black)
                         ) {
                             AsyncImage(
-                                model = detail.image,
+                                model = articleImageRequest(context, detail.image, 1080),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -466,78 +621,47 @@ private fun ArticleContent(viewModel: AppViewModel, slug: String) {
                                 modifier = Modifier.padding(bottom = 14.dp)
                             )
                         }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AnnouncementsList(viewModel: AppViewModel) {
-    val items = viewModel.announcements.items
-    val context = LocalContext.current
-    if (items.isEmpty() && !viewModel.isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(R.string.announcements_empty),
-                color = Color(0xFFB0BEC5),
-                fontSize = 15.sp
-            )
-        }
-        return
-    }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(items, key = { it.id }) { ann ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = brandDarkLight)
-            ) {
-                Column {
-                    if (ann.image.isNotBlank()) {
+                        // Like + comment: the like is per-device (no
+                        // backend exists); the comment opens the
+                        // article's Facebook post, where the owner reads
+                        // what people say. Without a post yet, the page.
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(160.dp)
-                                .background(Color.Black)
-                        ) {
-                            AsyncImage(
-                                model = ann.image,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = ann.title,
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
+                                .height(1.dp)
+                                .background(Color(0xFF334155))
                         )
-                        if (ann.text.isNotBlank()) {
-                            Text(
-                                text = ann.text,
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
-                        }
-                        if (ann.buttonUrl.isNotBlank() && ann.buttonText.isNotBlank()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            val liked = viewModel.isLiked(detail.slug)
                             Button(
-                                onClick = { openUrl(context, ann.buttonUrl) },
-                                modifier = Modifier.padding(top = 10.dp),
+                                onClick = { viewModel.toggleLike(detail.slug) },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = brandAccent,
-                                    contentColor = Color.Black
+                                    containerColor = if (liked) brandAccent else brandDarkLight,
+                                    contentColor = if (liked) Color.Black else Color.White
                                 )
                             ) {
-                                Text(ann.buttonText)
+                                Text(
+                                    if (liked) stringResource(R.string.liked_button)
+                                    else stringResource(R.string.like_button)
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    openUrl(
+                                        context,
+                                        detail.fbUrl.ifBlank { BuildConfig.FACEBOOK_PAGE_URL }
+                                    )
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = brandAccent
+                                )
+                            ) {
+                                Text(stringResource(R.string.comment_button))
                             }
                         }
                     }

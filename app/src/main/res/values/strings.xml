@@ -6,15 +6,22 @@
     <string name="offline_text">تحقق من اتصالك ثم حاول مرة أخرى.</string>
     <string name="retry">إعادة المحاولة</string>
     <string name="search_hint">ابحث في العناوين…</string>
-    <string name="tab_news">الأخبار</string>
-    <string name="tab_announcements">الإعلانات</string>
     <string name="all_categories">الكل</string>
     <string name="no_results">لا توجد نتائج مطابقة</string>
     <string name="offline_notice">أنت غير متصل — تُعرض المقالات المحفوظة</string>
     <string name="update_title">تحديث جديد متوفر</string>
     <string name="update_text">الإصدار %1$s متوفر الآن</string>
-    <string name="update_button">تحميل التحديث</string>
+    <string name="update_button">حدّث الآن</string>
+    <string name="update_downloading">جارٍ تحميل التحديث…</string>
+    <string name="update_install_allow">اسمح بالتثبيت من هذا المصدر ثم اضغط «حدّث الآن» مرة أخرى</string>
+    <string name="notification_channel">تحديثات التطبيق</string>
+    <string name="notification_title">تحديث جديد متوفر</string>
+    <string name="notification_text">الإصدار %1$s متوفر الآن — اضغط للتحديث</string>
+    <string name="follow_facebook">تابعنا على فيسبوك</string>
+    <string name="like_button">♥ أعجبني</string>
+    <string name="liked_button">♥ أعجبت به</string>
+    <string name="comment_button">تعليق</string>
+    <string name="dismiss">إغلاق</string>
     <string name="back_label">رجوع</string>
     <string name="article_error">تعذّر تحميل المقال</string>
-    <string name="announcements_empty">لا توجد إعلانات حالياً</string>
 </resources>

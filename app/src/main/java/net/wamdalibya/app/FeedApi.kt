@@ -11,14 +11,16 @@ import java.net.URL
  * Pages — no website, no WebView. Feed shape (both flavors):
  *   <base>/feed/index.json
  *     {"count": N, "articles": [{id, slug, title, date, category,
- *       category_name, image}]} — newest first.
+ *       category_name, image, fb_url}]} — newest first.
  *   <base>/feed/articles/article-NNN.json
- *     {id, slug, title, date, category, category_name, image,
+ *     {id, slug, title, date, category, category_name, image, fb_url,
  *      hashtags[], body[]} — body[0] is the title.
  *   <base>/announcements.json
  *     {latest_version_code, latest_version_name, apk_url,
  *      items: [{id, title, text, image, button_text, button_url}]}
  * Everything fetched is cached on disk, so the app still reads offline.
+ * Launch is cache-first (see AppViewModel): the cached index is shown
+ * instantly, then a background refresh swaps in fresh data.
  */
 data class FeedArticle(
     val id: Int,
@@ -27,7 +29,8 @@ data class FeedArticle(
     val date: String,
     val category: String,
     val categoryName: String,
-    val image: String
+    val image: String,
+    val fbUrl: String = ""
 )
 
 data class ArticleDetail(
@@ -38,6 +41,7 @@ data class ArticleDetail(
     val category: String,
     val categoryName: String,
     val image: String,
+    val fbUrl: String = "",
     val body: List<String>
 )
 
@@ -93,7 +97,8 @@ class FeedRepository(private val context: Context, private val baseUrl: String) 
                     date = o.optString("date", ""),
                     category = o.optString("category", ""),
                     categoryName = o.optString("category_name", ""),
-                    image = o.optString("image", "")
+                    image = o.optString("image", ""),
+                    fbUrl = o.optString("fb_url", "")
                 )
             )
         }
@@ -116,6 +121,7 @@ class FeedRepository(private val context: Context, private val baseUrl: String) 
                 category = o.optString("category", ""),
                 categoryName = o.optString("category_name", ""),
                 image = o.optString("image", ""),
+                fbUrl = o.optString("fb_url", ""),
                 body = body
             )
         } catch (e: Exception) {
@@ -171,6 +177,22 @@ class FeedRepository(private val context: Context, private val baseUrl: String) 
         } catch (e: Exception) {
             null
         }
+    }
+
+    /** Cache only — used at launch so the list appears instantly. */
+    fun fetchIndexCached(): List<FeedArticle>? {
+        val cached = readCache("index.json") ?: return null
+        return try {
+            parseIndex(cached)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Cache only — used at launch so a pending update shows instantly. */
+    fun fetchAnnouncementsCached(): AnnouncementsData {
+        val cached = readCache("announcements.json") ?: return AnnouncementsData(0, "", "", emptyList())
+        return parseAnnouncements(cached)
     }
 
     /** Network-first; returns null only when both network and cache miss. */

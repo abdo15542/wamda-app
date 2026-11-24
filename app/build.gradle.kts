@@ -35,12 +35,13 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 8
-            versionName = "1.2.0"
+            versionCode = 9
+            versionName = "1.3.0"
             // Native content feed (JSON) — the app reads articles straight
             // from GitHub Pages; no website/WebView involved.
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
             buildConfigField("boolean", "IS_ARABIC", "true")
+            buildConfigField("String", "FACEBOOK_PAGE_URL", "\"https://www.facebook.com/profile.php?id=61596420762599\"")
             // Real AdMob IDs (Abdoo's account, pub-6317687886565811).
             manifestPlaceholders["admobAppId"] = "ca-app-pub-6317687886565811~6841921039"
             buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-6317687886565811/7459586873\"")
@@ -48,10 +49,11 @@ android {
         create("en") {
             dimension = "language"
             applicationId = "net.libyapulse.app"
-            versionCode = 6
-            versionName = "1.1.0"
+            versionCode = 7
+            versionName = "1.2.0"
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/techpulse/\"")
             buildConfigField("boolean", "IS_ARABIC", "false")
+            buildConfigField("String", "FACEBOOK_PAGE_URL", "\"https://www.facebook.com/profile.php?id=61596701491859\"")
             // Real AdMob IDs (Abdoo's account, pub-6317687886565811).
             manifestPlaceholders["admobAppId"] = "ca-app-pub-6317687886565811~4758683178"
             buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-6317687886565811/3445601506\"")
@@ -94,6 +96,14 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // WorkManager — background update check (every 15 min) that posts a
+    // system notification when a newer build is published. 2.9.0 pairs
+    // with Kotlin 1.9.x; do not bump without checking the toolchain.
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // core-ktx — FileProvider (in-app APK install) + NotificationCompat.
+    implementation("androidx.core:core-ktx:1.12.0")
 
     // Coil — article images. 2.4.0 is era-matched to this toolchain
     // (same AsyncImage API as later 2.x releases).

@@ -6,15 +6,22 @@
     <string name="offline_text">Check your connection and try again.</string>
     <string name="retry">Try again</string>
     <string name="search_hint">Search titles…</string>
-    <string name="tab_news">News</string>
-    <string name="tab_announcements">Announcements</string>
     <string name="all_categories">All</string>
     <string name="no_results">No matching results</string>
     <string name="offline_notice">You are offline — showing saved articles</string>
     <string name="update_title">A new update is available</string>
     <string name="update_text">Version %1$s is now available</string>
-    <string name="update_button">Download update</string>
+    <string name="update_button">Update now</string>
+    <string name="update_downloading">Downloading update…</string>
+    <string name="update_install_allow">Allow installs from this source, then tap “Update now” again</string>
+    <string name="notification_channel">App updates</string>
+    <string name="notification_title">A new update is available</string>
+    <string name="notification_text">Version %1$s is out now — tap to update</string>
+    <string name="follow_facebook">Follow us on Facebook</string>
+    <string name="like_button">♥ Like</string>
+    <string name="liked_button">♥ Liked</string>
+    <string name="comment_button">Comment</string>
+    <string name="dismiss">Dismiss</string>
     <string name="back_label">Back</string>
     <string name="article_error">Could not load the article</string>
-    <string name="announcements_empty">No announcements yet</string>
 </resources>
