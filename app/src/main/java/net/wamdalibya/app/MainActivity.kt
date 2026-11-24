@@ -24,6 +24,12 @@ import com.google.android.gms.ads.MobileAds
  * Update notifications: a WorkManager periodic check (every 15 minutes)
  * posts a system notification when a newer build is published; the
  * notification permission is asked once at startup on Android 13+.
+ *
+ * NOTE 2026-11-24: run 45438057804 failed with exit code 1 and no compiler
+ * error in the annotations while GitHub's cache service was erroring
+ * ("Our services aren't available right now", incl. "Restore Gradle
+ * distribution 8.5 failed") — the same transient pattern as the v1 build.
+ * This commit only re-triggers CI; no code changed.
  */
 class MainActivity : ComponentActivity() {
 
