@@ -23,16 +23,15 @@ jobs:
       - name: Restore debug keystore
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: wamda-debug-keystore-v1
+          path: app/debug.keystore
+          key: wamda-debug-keystore-v2
 
       - name: Ensure debug keystore exists
         run: |
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkeypair -v -keystore ~/.android/debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
+          if [ ! -f app/debug.keystore ]; then
+            keytool -genkeypair -v -keystore app/debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
           fi
-          ls -l ~/.android/debug.keystore
+          ls -l app/debug.keystore
 
       - name: Build debug APKs (Arabic + English)
         run: gradle assembleArDebug assembleEnDebug --stacktrace
