@@ -37,8 +37,8 @@ android {
             dimension = "language"
             // Same package as the first build, so it updates on the phone.
             applicationId = "net.wamdalibya.app"
-            versionCode = 13
-            versionName = "1.5.2"
+            versionCode = 14
+            versionName = "1.5.3"
             // Native content feed (JSON) — the app reads articles straight
             // from GitHub Pages; no website/WebView involved.
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/wamdalibya/\"")
@@ -51,8 +51,8 @@ android {
         create("en") {
             dimension = "language"
             applicationId = "net.libyapulse.app"
-            versionCode = 11
-            versionName = "1.4.2"
+            versionCode = 12
+            versionName = "1.4.3"
             buildConfigField("String", "FEED_BASE_URL", "\"https://abdo15542.github.io/techpulse/\"")
             buildConfigField("boolean", "IS_ARABIC", "false")
             buildConfigField("String", "FACEBOOK_PAGE_URL", "\"https://www.facebook.com/profile.php?id=61596701491859\"")
@@ -174,6 +174,16 @@ dependencies {
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    // Classic Google Sign-In (play-services-auth) — v3.4 LEGACY FALLBACK.
+    // Credential Manager's Google ID flow throws NoCredentialException on
+    // some phones even though Google accounts exist and work in other
+    // apps (the old flow is what those apps use). When Credential
+    // Manager fails, signInWithGoogle falls back to this flow, which
+    // shows the classic account picker (and lets the user add an
+    // account on the spot). 21.2.0 is era-matched to compileSdk 34 /
+    // Kotlin 1.9.x; it only needs the same Web client id + SHA-1 that
+    // the Credential Manager flow already uses.
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     // Material icons (account icon in the header); version from the
     // Compose BOM above.
     implementation("androidx.compose.material:material-icons-core")

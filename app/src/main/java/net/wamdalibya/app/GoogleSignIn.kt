@@ -2,18 +2,27 @@ package net.wamdalibya.app
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Google Sign-In through Credential Manager (one-tap) — v3.1.
@@ -45,6 +54,17 @@ import kotlinx.coroutines.tasks.await
  * carrying the REAL exception (class name + Firebase errorCode when
  * present + message), which the account dialog shows verbatim and
  * which is also logged in full to Logcat.
+ *
+ * v3.4: when Credential Manager fails to provide ANY Google credential
+ * (GetCredentialException — in practice NoCredentialException, seen on
+ * Abdoo's phone 2026-11-25 even though Google accounts exist on the
+ * device and sign-in works in other apps), signInWithGoogle falls back
+ * to the CLASSIC Google Sign-In flow (GoogleSignInClient, the same
+ * flow other apps use). The classic flow shows the account picker
+ * directly and even lets the user add a Google account on the spot.
+ * It needs the same Web client id + SHA-1 the Credential Manager flow
+ * already uses — no new console setup. MainActivity forwards its
+ * onActivityResult to LegacyGoogleSignIn (request code 9001).
  */
 data class GoogleSignInResult(val uid: String, val displayName: String?)
 
@@ -106,6 +126,14 @@ suspend fun signInWithGoogle(activity: Activity): GoogleSignInOutcome {
         // "unverified app" warning) — their choice, not an error:
         // nothing is shown, the dialog just stays open.
         GoogleSignInOutcome.Cancelled
+    } catch (e: GetCredentialException) {
+        // v3.4 FALLBACK: Credential Manager could not provide any Google
+        // credential on this device (NoCredentialException even though
+        // accounts exist — seen on Abdoo's phone 2026-11-25, where
+        // sign-in works fine in other apps). The classic Google Sign-In
+        // flow is what those apps use, so try it before giving up.
+        Log.w(TAG, "Credential Manager failed (${e::class.java.simpleName}); trying legacy Google sign-in", e)
+        signInWithGoogleLegacy(activity)
     } catch (e: Exception) {
         // The real error, in full, to Logcat — and carried back so the
         // dialog can show it instead of a generic "check connection".
@@ -169,7 +197,20 @@ private suspend fun linkGoogleCredential(
         return null
     }
     val googleId = GoogleIdTokenCredential.createFrom(credential.data)
-    val firebaseCredential = GoogleAuthProvider.getCredential(googleId.idToken, null)
+    return linkGoogleIdToken(context, googleId.idToken)
+}
+
+/**
+ * Turns a Google ID token into a Firebase user (link or sign-in).
+ * Shared by the Credential Manager path and the v3.4 legacy fallback.
+ * Throws on a Firebase failure (e.g. ERROR_INVALID_CREDENTIAL) — the
+ * caller turns it into a Failed outcome with the real error code.
+ */
+private suspend fun linkGoogleIdToken(
+    context: Context,
+    idToken: String
+): GoogleSignInResult? {
+    val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
     val auth = FirebaseAuth.getInstance()
     val current = auth.currentUser
     val result = if (current != null && current.isAnonymous) {
@@ -181,6 +222,104 @@ private suspend fun linkGoogleCredential(
     val user = result.user ?: return null
     setGoogleLinked(context, true)
     return GoogleSignInResult(user.uid, user.displayName)
+}
+
+/**
+ * Classic Google Sign-In fallback (v3.4) — the flow other apps use.
+ * Shows the Google account picker directly (the user can even add a
+ * Google account on the spot). The result arrives through
+ * MainActivity.onActivityResult -> LegacyGoogleSignIn.onActivityResult.
+ * The 5-minute timeout only guards a leaked wait (e.g. the activity
+ * was destroyed mid-flow); a normal cancel arrives as Cancelled.
+ */
+suspend fun signInWithGoogleLegacy(activity: Activity): GoogleSignInOutcome {
+    return try {
+        val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(activity.getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+        val client = GoogleSignIn.getClient(activity, options)
+        val deferred = CompletableDeferred<LegacyResult>()
+        LegacyGoogleSignIn.setPending(deferred)
+        // startActivityForResult must run on the Main thread (this
+        // function is normally called from Dispatchers.IO).
+        withContext(Dispatchers.Main) {
+            activity.startActivityForResult(
+                client.signInIntent, LegacyGoogleSignIn.REQUEST_CODE
+            )
+        }
+        val result = withTimeoutOrNull(300_000L) { deferred.await() }
+            ?: LegacyResult.Failed("LegacyTimeout", null)
+        LegacyGoogleSignIn.clearPending()
+        when (result) {
+            is LegacyResult.Token -> {
+                val linked = try {
+                    linkGoogleIdToken(activity, result.idToken)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Legacy Google sign-in: Firebase link failed", e)
+                    return GoogleSignInOutcome.Failed(failureCode(e), e.message)
+                }
+                if (linked != null) GoogleSignInOutcome.Success(linked)
+                else GoogleSignInOutcome.Failed("LinkFailed", null)
+            }
+            LegacyResult.Cancelled -> GoogleSignInOutcome.Cancelled
+            is LegacyResult.Failed -> GoogleSignInOutcome.Failed(result.code, result.detail)
+        }
+    } catch (e: Exception) {
+        LegacyGoogleSignIn.clearPending()
+        Log.e(TAG, "Legacy Google sign-in failed", e)
+        GoogleSignInOutcome.Failed(failureCode(e), e.message)
+    }
+}
+
+private sealed interface LegacyResult {
+    data class Token(val idToken: String) : LegacyResult
+    object Cancelled : LegacyResult
+    data class Failed(val code: String, val detail: String?) : LegacyResult
+}
+
+/**
+ * Holds the one in-flight legacy sign-in. MainActivity forwards its
+ * onActivityResult here; the awaiting coroutine in
+ * signInWithGoogleLegacy then links the token to Firebase.
+ */
+object LegacyGoogleSignIn {
+    const val REQUEST_CODE = 9001
+    private var pending: CompletableDeferred<LegacyResult>? = null
+
+    fun setPending(deferred: CompletableDeferred<LegacyResult>) {
+        pending = deferred
+    }
+
+    fun clearPending() {
+        pending = null
+    }
+
+    fun onActivityResult(resultCode: Int, data: Intent?) {
+        val deferred = pending ?: return
+        pending = null
+        if (resultCode != Activity.RESULT_OK) {
+            // The user backed out of the account picker — their choice,
+            // not an error.
+            deferred.complete(LegacyResult.Cancelled)
+            return
+        }
+        val result: LegacyResult = try {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account?.idToken
+            if (idToken.isNullOrBlank()) LegacyResult.Failed("NoGoogleIdToken", null)
+            else LegacyResult.Token(idToken)
+        } catch (e: ApiException) {
+            // 12501 = the user cancelled the picker; anything else is a
+            // real failure (e.g. 10 = DEVELOPER_ERROR, a console misconfig).
+            if (e.statusCode == 12501) LegacyResult.Cancelled
+            else LegacyResult.Failed("ApiException (${e.statusCode})", e.message)
+        } catch (e: Exception) {
+            LegacyResult.Failed(e::class.java.simpleName, e.message)
+        }
+        deferred.complete(result)
+    }
 }
 
 /**
