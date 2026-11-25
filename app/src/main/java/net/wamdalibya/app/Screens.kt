@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -343,11 +344,37 @@ private fun HomeContent(viewModel: AppViewModel) {
 /**
  * Update card: one tap downloads the APK inside the app (DownloadManager)
  * and opens the Android installer automatically when it finishes.
+ *
+ * v3.3: the button NEVER yanks the user out of the app on its own.
+ * When the app still needs the one-time install permission, an in-app
+ * dialog explains it first — only the dialog's button opens Settings.
+ * A failed download resets the button so the user can tap again.
  */
 @Composable
 private fun UpdateCard(ann: AnnouncementsData) {
     val context = LocalContext.current
     var downloading by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = { Text(stringResource(R.string.update_permission_title)) },
+            text = { Text(stringResource(R.string.update_permission_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPermissionDialog = false
+                    UpdateInstaller.openInstallSettings(context)
+                }) {
+                    Text(stringResource(R.string.update_permission_open))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text(stringResource(R.string.dismiss))
+                }
+            }
+        )
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -369,8 +396,28 @@ private fun UpdateCard(ann: AnnouncementsData) {
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
-                    if (!downloading) {
-                        downloading = UpdateInstaller.startUpdate(context, ann.apkUrl)
+                    if (downloading) return@Button
+                    when (UpdateInstaller.startUpdate(context, ann.apkUrl) { ok ->
+                        // Download finished: installer opened (ok) or failed.
+                        if (!ok) {
+                            downloading = false
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.update_failed),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }) {
+                        UpdateInstaller.UpdateResult.Started -> downloading = true
+                        UpdateInstaller.UpdateResult.NeedsPermission ->
+                            showPermissionDialog = true
+                        UpdateInstaller.UpdateResult.Failed -> {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.update_failed),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White)

@@ -42,6 +42,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Crash diagnostics (v3.3): record any real crash so its exact
+        // cause can be read later; send any saved report from last run.
+        CrashReporter.install(this)
+        CrashReporter.uploadPending(this)
         MobileAds.initialize(this)
         UpdateCheckWorker.enqueue(this)
         if (Build.VERSION.SDK_INT >= 33 &&

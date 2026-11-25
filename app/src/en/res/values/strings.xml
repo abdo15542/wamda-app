@@ -14,6 +14,10 @@
     <string name="update_button">Update now</string>
     <string name="update_downloading">Downloading update…</string>
     <string name="update_install_allow">Allow installs from this source, then tap “Update now” again</string>
+    <string name="update_permission_title">Install permission needed once</string>
+    <string name="update_permission_text">Android asks once for permission to install updates from this app. Tap “Open settings”, turn on “Allow from this source”, then come back and tap “Update now” again.</string>
+    <string name="update_permission_open">Open settings</string>
+    <string name="update_failed">Could not download the update — check your connection and try again</string>
     <string name="notification_channel">App updates</string>
     <string name="notification_title">A new update is available</string>
     <string name="notification_text">Version %1$s is out now — tap to update</string>

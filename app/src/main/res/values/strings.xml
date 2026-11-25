@@ -14,6 +14,10 @@
     <string name="update_button">حدّث الآن</string>
     <string name="update_downloading">جارٍ تحميل التحديث…</string>
     <string name="update_install_allow">اسمح بالتثبيت من هذا المصدر ثم اضغط «حدّث الآن» مرة أخرى</string>
+    <string name="update_permission_title">إذن التثبيت مطلوب مرة واحدة</string>
+    <string name="update_permission_text">أندرويد يطلب إذناً واحداً لتثبيت التحديثات من التطبيق نفسه. اضغط «فتح الإعدادات»، فعّل «السماح من هذا المصدر»، ثم ارجع واضغط «حدّث الآن» مرة أخرى.</string>
+    <string name="update_permission_open">فتح الإعدادات</string>
+    <string name="update_failed">تعذّر تحميل التحديث — تحقق من الإنترنت وحاول مجدداً</string>
     <string name="notification_channel">تحديثات التطبيق</string>
     <string name="notification_title">تحديث جديد متوفر</string>
     <string name="notification_text">الإصدار %1$s متوفر الآن — اضغط للتحديث</string>
