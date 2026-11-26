@@ -272,7 +272,13 @@ suspend fun signInWithGoogleLegacy(activity: Activity): GoogleSignInOutcome {
     }
 }
 
-private sealed interface LegacyResult {
+/**
+ * Result of the legacy account-picker step. Public (not private):
+ * LegacyGoogleSignIn.setPending exposes it in a public signature, and
+ * a public function may not expose a private-in-file type (that was a
+ * v3.4 CI compile error, run #36). Only used inside this file.
+ */
+sealed interface LegacyResult {
     data class Token(val idToken: String) : LegacyResult
     object Cancelled : LegacyResult
     data class Failed(val code: String, val detail: String?) : LegacyResult
